@@ -468,6 +468,28 @@ OTel was present but inert: `TelemetryConfig` built an `SdkTracerProvider` with 
 
 ---
 
+## ADR-021 — Vector store standardization: Qdrant (production) + In-Memory (dev/test)
+
+**Status:** Accepted (SCALE-3 implemented 2026-07-23)
+
+**Context.**
+`ai-qa-os-memory` shipped with 5 `VectorStoreClient` implementations (`QdrantStoreClient`, `InMemoryVectorStoreClient`, `ChromaStoreClient`, `MilvusStoreClient`, `PgVectorStoreClient`). Maintaining five vector clients created unnecessary surface area and cognitive load. Qdrant (`qdrant:6333`) is natively provisioned by the deployment infrastructure.
+
+**Decision.**
+- **Standardise on Qdrant** as the single primary production vector store provider (`aiqaos.memory.vector.provider=qdrant`).
+- **Standardise on InMemoryVectorStoreClient** as the supported dev/test fallback provider (`aiqaos.memory.vector.provider=in-memory` or when unset).
+- **Deprecate and isolate unmaintained stubs** (`ChromaStoreClient`, `MilvusStoreClient`, `PgVectorStoreClient`) under `@Deprecated` and gate bean registration behind `aiqaos.memory.vector.experimental.enabled=true`.
+- **Add unit testing**: unit test coverage added for `InMemoryVectorStoreClient` (vector save, cosine similarity search, update, delete, collection management).
+
+**Consequences.**
+- *Positive:* reduces maintenance surface, clarifies supported vector store path for production and testing environments.
+- *Negative / trade-off:* experimental stubs require an explicit property to instantiate.
+- *Imposed rule:* production deployments must set `aiqaos.memory.vector.provider=qdrant`; tests use in-memory vector store by default.
+
+**Related:** SCALE-3; AI-4 (semantic cache); PERF-2 (batch embeddings).
+
+---
+
 ## Document Completion Status
 
 **Status:** Active — new ADRs appended as decisions are made (per MNT-5)
