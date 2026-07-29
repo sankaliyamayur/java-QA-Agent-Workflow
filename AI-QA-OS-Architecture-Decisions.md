@@ -965,6 +965,131 @@ ENT-1's `core` `TenantContext` (ADR-041) and MOD-1's `TenantResolver` (ADR-042) 
 
 ---
 
+## ADR-044 — `ai-qa-os-notification` module: single governed egress point via a channel-sender SPI
+
+**Status:** Accepted (implemented — MOD-2, 2026-07-29)
+
+**Context.**
+Outbound comms were a cross-cutting smear — `reporting`'s `NotificationFramework`/Slack/Teams senders, `orchestration`'s `SlackPlugin`, `observability`'s `NotificationAdapter`, and PLG-2's chat plugins — with no single egress point. MOD-2 centralises them; the roadmap says the existing `SlackPlugin` becomes an adapter, and the module depends on `core` + `integration`.
+
+**Decision.**
+- **New `ai-qa-os-notification` module (23rd)** depending on `core` + `integration`, registered in the reactor.
+- **Channel-sender SPI + dispatcher (§0.4-A)** — a `NotificationSender` SPI (`channel()` + `send()`), per-channel senders (SLACK/EMAIL/WEBHOOK/TEAMS), and a `NotificationService` that routes a `Notification` to the matching sender; **a channel with no sender yields a failed `NotificationResult`, never an exception**.
+- **Slack via the PLG-2 adapter** — `SlackNotificationSender` delegates to the PLG-2 `SlackIntegrationPlugin`, realising "SlackPlugin becomes an adapter"; Email/Webhook/Teams are simulated. Real transports (SMTP/live Slack/HTTP) are deferred behind the SPI (FI-MOD2-B).
+
+**Consequences.**
+- *Positive:* one governed egress point exists, unit-proven (5 tests); the Slack path reuses the PLG-2 plugin; additive module, no blast radius; all beans single-constructor plain `@Component`s (no repeat of the 2026-07-29 wiring bugs).
+- *Negative / trade-off:* transports are simulated (FI-MOD2-B); the scattered `reporting`/`orchestration`/`observability` senders aren't migrated to route through it yet (FI-MOD2-A); event-driven triggering is ENT-2.
+- *Imposed rule:* outbound comms go through the `NotificationService` egress point; an unconfigured channel fails gracefully, never breaks the caller.
+
+**Related:** MOD-2; PLG-2/ADR-037 (`SlackIntegrationPlugin` reused as adapter), ENT-2 (event-driven notifications — consumer), SEC-2 (transport credentials); FI-MOD2-A/B.
+
+---
+
+## ADR-045 — First-class agent roster catalog (AGT-1 increment)
+
+**Status:** Accepted (implemented — AGT-1 roster increment, 2026-07-29) · AGT-1 stays incremental/rolling
+
+**Context.**
+AGT-1 ("grow the agent roster incrementally", Effort XL, v2.1→v3.x) had no first-class *roster*: the runtime `AgentRegistry` tracks live `Agent` beans, but the roadmap's catalog of 18 agents (implemented + designed + future) with categories/status lived only in a roadmap table. Coverage and gaps weren't programmatic.
+
+**Decision.**
+- **`AgentRoster` catalog in `ai-qa-os-agents` (§0.4-A)** — `AgentDescriptor` (name, `AgentCategory`, `AgentStatus`, implementing class) seeded with the 18 roster entries; queries `byCategory`/`byStatus`/`find`/`categories` + a `coverageRatio` (implemented/total). Pure data + queries.
+- **Specialist agents deferred** — implementing the 10 Future agents (API/Mobile/Performance/…) is the ongoing incremental work behind DX-2 scaffolding + PLG-3 execution SDKs (FI-AGT1-A); as each lands, its descriptor flips to `IMPLEMENTED`.
+- **AGT-1 stays incremental/rolling** — the roster *mechanism* is done; the roster itself grows over releases.
+
+**Consequences.**
+- *Positive:* agent coverage (6/18) + gaps by category are now programmatic and unit-proven (7 tests); additive plain `@Component`, no blast radius; a stable place to track new agents as they're built.
+- *Negative / trade-off:* the catalog is hand-seeded (not reconciled against live `AgentRegistry` beans — FI-AGT1-B); no new agents were built (that's the deferred incremental work).
+- *Imposed rule:* new specialist agents are registered in the roster as they're scaffolded, keeping the coverage view honest.
+
+**Related:** AGT-1; `AgentRegistry`/`AgentType` (runtime agents), DX-2 (scaffolding), PLG-3 (execution SDKs); FI-AGT1-A (build Future agents), FI-AGT1-B (reconcile with live beans).
+
+---
+
+## ADR-046 — Tenant-scoped cross-run healing memory over `MemoryStore`
+
+**Status:** Accepted (implemented — HEAL-4, 2026-07-29)
+
+**Context.**
+HEAL-1 heals a locator per failure, but nothing remembered a validated heal for next time — so the loop's "Future Auto Recovery" was aspirational. HEAL-4 makes healing cross-run: recall a previously-validated locator when the same element drifts again (even in a different test) and flag fragile locators. It reuses `memory` (healing already depends on it) and should be tenant-scoped once ENT-1 lands — which it has (ADR-041).
+
+**Decision.**
+- **`HealingMemory` over `MemoryStore` (§0.4-A)** — `remember(brokenLocator, healedLocator, strategy, confidence)` stores a `HealedLocatorRecord` keyed by the broken locator; `recall(brokenLocator)` returns the previously-validated heal; `isKnownFragile` flags a locator that has drifted more than once. Reuses the `memory` infrastructure — no new module.
+- **Tenant-scoped keys** — `healing:heal:<tenantId>:<brokenLocator>`, with `tenantId` from ENT-1's `TenantContextHolder.current()` (system tenant when unbound) — one project's heals never recall under another's, realising the roadmap's tenant-isolation requirement.
+- **Fragility from repeat drift** — re-remembering the same broken locator increments `reuseCount` and marks it `fragile` (pre-emptive hardening signal).
+- **Exact-key match; vector-similarity deferred** — fuzzy retrieval of *similar* elements/contexts via `VectorStoreClient` is the enrichment (FI-HEAL4-A).
+
+**Consequences.**
+- *Positive:* a validated heal is remembered and recalled instantly on recurrence, tenant-isolated; repeat drift flags fragility; unit-proven (5 tests incl. tenant isolation); additive single-constructor `@Component`, reuses `memory`, no new dep. First real consumer of ENT-1's tenant context beyond the gateway filter.
+- *Negative / trade-off:* exact broken-locator key only — doesn't yet match a *similar* element in a different test (FI-HEAL4-A); recall-before-propose isn't wired into the heal flow yet (FI-HEAL4-B); the HEAL-3 locator-history surface is separate.
+- *Imposed rule:* healing knowledge is cross-run and tenant-isolated; a locator that drifts twice is treated as fragile.
+
+**Related:** HEAL-4; HEAL-1/ADR-033 (locator heals), ENT-1/ADR-041 (`TenantContext` — reused for scoping), `RecoveryHistoryStore`/`MemoryStore` (memory infra); mirrors LRN-1 (cross-run learning); HEAL-3 (locator history), FI-HEAL4-A/B.
+
+---
+
+## ADR-047 — Healing analytics read-model via a pure assembler (HEAL-3 backend increment)
+
+**Status:** Accepted (implemented — HEAL-3 read-model, 2026-07-29) · HEAL-3 remains In Progress
+
+**Context.**
+HEAL-3 makes autonomous editing trustworthy via a healing dashboard + analytics + locator version history. The existing `HealingAnalyticsService` was thin (per-execution list + action-type breakdown) with no success-rate/summary read-model. In a no-frontend environment, the validatable substance is the analytics aggregation, not the UI.
+
+**Decision.**
+- **Pure analytics assembler (§0.4-A)** — `HealingAnalyticsAssembler.summarize(List<HealingMetricEntity>) → HealingAnalyticsSummary` (total, applied, successful, **success rate**, avg improvement score, action-type/recovery-status/failure-category breakdowns). No I/O — the GOV-1 `AiAuditAssembler` pattern — so it's trivially unit-testable. Exposed via `HealingAnalyticsService.getSummary()` (the assembler injected into the existing single-constructor service).
+- **UI + versioned locator store deferred** — the dashboard UI is frontend (not verifiable here); a versioned locator store for locator version history needs persistence (FI-HEAL3-A); "most-drifting locators" needs a list-queryable index over HEAL-4's key-value `HealingMemory` (FI-HEAL3-B). **HEAL-3 stays In Progress.**
+
+**Consequences.**
+- *Positive:* healing is now auditable at a glance (success rate + breakdowns), unit-proven (4 tests); additive; the constructor change wired cleanly (dashboard `@SpringBootTest`/`@WebMvcTest` context green — no repeat of the earlier wiring bugs).
+- *Negative / trade-off:* no UI rendered, no locator version history, no drift ranking yet — HEAL-3 is not Completed.
+- *Imposed rule:* healing analytics are computed by a pure assembler over the metric records; presentation layers consume the read-model.
+
+**Related:** HEAL-3; `HealingMetricEntity`/`HealingMetricRepository` (observability), HEAL-1/2/4 (the healed data), GOV-1/ADR-026 (assembler pattern), OBS-3 (dashboards suite); FI-HEAL3-A/B/C.
+
+---
+
+## ADR-048 — Extension SDK: uniform `Extension` SPI in `core` + governed registry in `integration`
+
+**Status:** Accepted (implemented — PLG-3, 2026-07-29)
+
+**Context.**
+The platform's deepest extension points — custom agents, execution engines (only Playwright built; Selenium/REST-Assured/Appium designed), reporters, browsers — each had a per-type contract but no uniform, discoverable extension seam or SDK-version governance. PLG-3 exposes them as SDK contracts so teams add capability without touching core.
+
+**Decision.**
+- **`Extension` SPI in `core` (§0.4-A)** — `Extension` (`id`/`kind`/`extensionPoint`/`sdkApiVersion`) + `ExtensionKind` (AGENT/EXECUTION_ENGINE/REPORTER/BROWSER). Placed in `core` because the genuine implementers live in `agents`/`execution`/`reporting` (or third-party modules depending on them) — none depend on `integration` — the real cross-module implementer case (ADR-010/015), unlike PLG-1's plugins which live in `integration`.
+- **`ExtensionRegistry` in `integration`** — governed registration: an extension's id must be unique within its kind, and its declared SDK API version must be compatible with the runtime, reusing **PLG-1's `SemanticVersion`**. Discovery by kind (`byKind`/`find`/`kinds`/`all`); `ExtensionSdkProperties` (`aiqaos.sdk.api-version`).
+- **Building extensions deferred** — actual new engines/reporters/browsers are the ongoing work behind DX-2 + real frameworks (FI-PLG3-A); wiring the registry into selection paths is FI-PLG3-B.
+
+**Consequences.**
+- *Positive:* the four deep extension points are now a uniform, governed, discoverable seam, unit-proven (5 tests); reuses PLG-1's versioning; additive single-constructor `@Component`, no blast radius. This is how the platform gains API/mobile/performance testing without core rewrites.
+- *Negative / trade-off:* no new extension built yet (FI-PLG3-A); the registry isn't wired into the execution/agent/reporter selection paths (FI-PLG3-B); no DX-2 scaffolding.
+- *Imposed rule:* a deep extension implements the one `Extension` SPI and registers under SDK-version governance; ids are unique per kind.
+
+**Related:** PLG-3; PLG-1/ADR-036 (`SemanticVersion` + registry pattern reused), `Agent`/`ExecutionEngine`/`ReportGenerator` (the per-type contracts unified), AGT-1 (agent extenders), DX-2 (scaffolding), PLG-4 (marketplace); FI-PLG3-A/B.
+
+---
+
+## ADR-049 — Centralised event→notification routing + templating over MOD-2
+
+**Status:** Accepted (implemented — ENT-2, 2026-07-29)
+
+**Context.**
+Outbound comms were scattered; stakeholders need run-complete, failure, and approval-request notifications through one governed channel with templating — and AI-2's approval flow needs a way to actually reach a human. MOD-2 delivered the egress point (`NotificationService`), but nothing turned a platform event into a templated notification.
+
+**Decision.**
+- **`NotificationEventRouter` in `ai-qa-os-notification` (§0.4-A)** — turns a `NotificationEvent` (`RUN_COMPLETE`/`RUN_FAILURE`/`APPROVAL_REQUEST`) into a templated, severity-ranked `Notification` (`RUN_FAILURE`→CRITICAL, `APPROVAL_REQUEST`→WARNING, `RUN_COMPLETE`→INFO; per-type subject/body) on a resolved channel (event's own, else the configured `aiqaos.notification.default-channel`), then dispatches it through MOD-2's `NotificationService`. All run/approval comms flow through one governed path.
+- **Live event wiring deferred** — `@EventListener` subscriptions to the real publishers (`WorkflowEventPublisher`/AI-2 review events, cross-module) and delivery-retry/outbox guarantees are deferred (FI-ENT2-A/B).
+
+**Consequences.**
+- *Positive:* the three named notification types are centralised, templated, and severity-ranked over the one egress point, unit-proven (5 tests); reuses MOD-2 (the Slack channel already delegates to the PLG-2 adapter); additive single-constructor `@Service`, no blast radius. Provides the concrete path for AI-2's approval to reach a human.
+- *Negative / trade-off:* nothing fires it from real events yet (FI-ENT2-A); delivery is MOD-2's synchronous result — no retry/outbox (FI-ENT2-B); no scheduled digests.
+- *Imposed rule:* run/approval notifications are built by templating an event and dispatched through the single `NotificationService` egress point.
+
+**Related:** ENT-2; MOD-2/ADR-044 (`NotificationService` egress), AI-2 (approval flow this feeds), event publishers (`WorkflowEventPublisher`/etc. — deferred sources); FI-ENT2-A/B.
+
+---
+
 ## Document Completion Status
 
 **Status:** Active — new ADRs appended as decisions are made (per MNT-5)
