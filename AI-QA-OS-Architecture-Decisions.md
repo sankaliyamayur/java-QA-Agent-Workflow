@@ -94,6 +94,8 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-063](#adr-063--lrn-3-dashboard-deferred-its-observation-pipeline-is-unbuilt-no-empty-dashboard-scaffolding) | LRN-3 dashboard deferred: its observation pipeline is unbuilt; no empty-dashboard scaffolding | Accepted |
 | [ADR-064](#adr-064--distributed-eventbus-over-kafka-kafkaeventbus-behind-an-optional-dependency-scale-2-kafka-binding) | Distributed `EventBus` over Kafka: `KafkaEventBus` behind an optional dependency (SCALE-2 Kafka binding) | Accepted |
 | [ADR-065](#adr-065--distributed-executionjobqueue-over-redis-streams-redisstreamexecutionjobqueue-behind-an-optional-dependency-scale-1) | Distributed `ExecutionJobQueue` over Redis Streams: `RedisStreamExecutionJobQueue` behind an optional dependency (SCALE-1) | Accepted |
+| [ADR-066](#adr-066--userrole-mapping-via-elementcollection--role-derived-authorities-fi-ent4-c) | User↔role mapping via `@ElementCollection` + role-derived authorities (FI-ENT4-C) | Accepted |
+| [ADR-067](#adr-067--admin-write-ops-api-at-apiadmin-on-the-enforced-chain-admin-gated-fi-ent4-a) | Admin write-ops API at `/api/admin/**` on the enforced chain, ADMIN-gated (FI-ENT4-A) | Accepted |
 
 ---
 
@@ -1459,6 +1461,49 @@ SCALE-1's `ExecutionJobQueue` seam + `InProcessExecutionJobQueue` (single-JVM wo
 - *Imposed rule:* a distributed **job queue** uses competing consumers over Redis Streams with `XACK` durability (not the broadcast event bus); the seam is the abstraction, the provider is config-selected, default in-process.
 
 **Related:** SCALE-1; `ExecutionJobQueue`/`InProcessExecutionJobQueue` seam, ADR-064 (optional-dep + conditional pattern), ADR-053 (Redis provisioned), SCALE-2 (contrast: broadcast vs competing-consumers).
+
+---
+
+## ADR-066 — User↔role mapping via `@ElementCollection` + role-derived authorities (FI-ENT4-C)
+
+**Status:** Accepted (implemented — FI-ENT4-C, 2026-07-31) · **ENT-4 remains In Progress**
+
+**Context.**
+Designing ENT-4's admin **write-ops** (FI-ENT4-A) surfaced that they **can't be built safely**: `UserEntity` had **no roles**, `JwtAuthenticationFilter` granted a hardcoded `ROLE_USER` (a "no user→role model yet" note), and there was **no user↔role mapping**. So a write endpoint would be an ungated hole or gated on an authority nobody holds, and the UI's client-chosen role was unvalidated server-side (a known tech-debt item). The missing foundation is FI-ENT4-C.
+
+**Decision (Option A).**
+- **`UserEntity.roles`** — an `@ElementCollection<String>` (`security_user_roles(user_id, role_name)`, EAGER), referencing the global role catalog **by name** (ADR-055); mirrors the existing `backupCodes` collection. Migration **V22** (gateway-owned, ADR-024) with an FK to `security_users(id)` `ON DELETE CASCADE`.
+- **`AuthorityMapper`** — derives `GrantedAuthority`s: baseline `ROLE_USER` + `ROLE_<NAME>` per role (case-normalised, `ROLE_`-prefix-aware, deduped). `JwtAuthenticationFilter` uses it (the user is already loaded per request), so an ADMIN-role user carries `ROLE_ADMIN`.
+- **Bootstrap admin** seeded `roles=["ADMIN"]` so there is a real admin.
+
+**Consequences.**
+- *Positive:* `hasRole('ADMIN')` / URL role rules now work; the UI `RoleGuard` role is validated server-side (closes the client-chosen-role tech-debt); **unblocks FI-ENT4-A write-ops**. `AuthorityMapper` unit-proven (4 tests); full reactor green; the FI-ENT1-D tenant filter test stays green.
+- *Negative / trade-off:* role names aren't FK-enforced against `RoleEntity` (acceptable — small admin-curated catalog); per-permission (fine-grained) authorities from `RolePermissionEntity` are deferred; end-to-end `hasRole('ADMIN')` over a real DB with a seeded admin is user-run.
+- *Imposed rule:* authenticated principals' authorities **derive from persisted roles** (`ROLE_<name>`), never a hardcoded baseline; roles are name-based against the global catalog.
+
+**Related:** ENT-4; FI-ENT4-C; **FI-ENT4-A (now unblocked)**; ADR-055 (roles global catalog), ADR-052 (RBAC read-model), SEC-1 (auth), FI-ENT1-D (`JwtAuthenticationFilter` tenant binding — unchanged).
+
+---
+
+## ADR-067 — Admin write-ops API at `/api/admin/**` on the enforced chain, ADMIN-gated (FI-ENT4-A)
+
+**Status:** Accepted (implemented — FI-ENT4-A, 2026-07-31) · **ENT-4 remains In Progress** (write-ops now landed; audit + unlock/reset still open)
+
+**Context.**
+FI-ENT4-C (ADR-066) gave a real `ROLE_ADMIN`, unblocking ENT-4's mutating half (create / disable / assign-roles). The obstacle is *where* it can be enforced: `DashboardSecurityConfig` (`@Order(1)`) `permitAll()`s `/api/dashboard/**` **with no JWT filter**, so any write placed under that prefix is unauthenticated. The secret-free read-model living there (FI-ENT4-B) is acceptable; user-management writes are not. Paths **outside** that matcher fall onto `SecurityConfig.enforcedFilterChain`, where the JWT filter runs and `@EnableMethodSecurity` (global) applies.
+
+**Decision (Option A).**
+- **`AdminUserController`** (`com.aiqaos.security.admin`) at **`/api/admin/users`** — `POST /` (create), `PATCH /{id}/enabled`, `PUT /{id}/roles`. Class-level **`@PreAuthorize("hasRole('ADMIN')")`**. Because `/api/admin/**` is deliberately **not** in the dashboard matcher, requests land on the enforced JWT chain on both apps; the method-security check then **fails closed** — an unauthenticated or non-admin caller is rejected regardless of which filter chain matched. **No change to the security chains.**
+- **`AdminUserService`** — tenant is never client-supplied: `@TenantId` stamps new users with the caller's JWT-bound tenant and filters reads (ENT-1). BCrypt hashing (as bootstrap); role names validated against the **global catalog** (`RoleRepository`, case-insensitive → canonical) so an admin cannot invent authorities; business guards authz can't express — **no self-lockout** (disabling your own account) and **no self-demotion** (removing your own `ADMIN`) → 400.
+- **Read-model `AdminUserView`** gains a secret-free **`id`** (so the UI can target `/{id}`) and **`roles`** (to render/prefill the editor).
+- **React `AdminPage`** gains a create form + per-row enable/disable + role editor; `apiClient` already injects the bearer token, so writes carry auth automatically.
+
+**Consequences.**
+- *Positive:* ADMIN-gated, tenant-scoped user management; fails closed even if a chain is later misconfigured; zero change to the (security-critical) filter chains. Service guards unit-proven (`AdminUserServiceTest` 8/8); full reactor green (22 modules); UI type-checks/builds.
+- *Negative / trade-off:* read stays open at `/api/dashboard/admin/rbac` while writes are at `/api/admin/users` — two base paths (acceptable; read is secret-free). Role names still un-FK'd at the DB (the write path validates against the catalog instead). Audit-log emission and unlock/password-reset are deferred (FI-ENT4-D/E). Live ADMIN-gated E2E over a real DB is user-run.
+- *Imposed rule:* user-management **mutations require `ROLE_ADMIN` and live on the JWT-enforced chain**, never the permissive dashboard chain; an admin can neither self-lockout nor self-demote.
+
+**Related:** ENT-4; FI-ENT4-A; FI-ENT4-C/ADR-066 (the unblocker); FI-ENT4-B/ADR-052 (read-model); ADR-055/058 (JWT-authoritative tenancy); SEC-1 (auth); `DashboardSecurityConfig` (the permissive chain this routes around).
 
 ---
 
