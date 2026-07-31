@@ -92,6 +92,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-061](#adr-061--bridge-the-core-eventbus-seam-to-spring-events-during-publisher-migration-fi-scale2-a) | Bridge the `core` `EventBus` seam to Spring events during publisher migration (FI-SCALE2-A) | Accepted |
 | [ADR-062](#adr-062--serve-dashboard-read-models-by-aggregating-persisted-data-pe-3-from-eval_results-lrn-3-deferred-no-faithful-source) | Serve dashboard read-models by aggregating persisted data; PE-3 from `eval_results`, LRN-3 deferred (no faithful source) | Accepted |
 | [ADR-063](#adr-063--lrn-3-dashboard-deferred-its-observation-pipeline-is-unbuilt-no-empty-dashboard-scaffolding) | LRN-3 dashboard deferred: its observation pipeline is unbuilt; no empty-dashboard scaffolding | Accepted |
+| [ADR-064](#adr-064--distributed-eventbus-over-kafka-kafkaeventbus-behind-an-optional-dependency-scale-2-kafka-binding) | Distributed `EventBus` over Kafka: `KafkaEventBus` behind an optional dependency (SCALE-2 Kafka binding) | Accepted |
 
 ---
 
@@ -1413,6 +1414,29 @@ Designing LRN-3's data source (Option B, deferred by ADR-062) revealed the LRN-2
 - *Imposed rule:* **a dashboard read-model ships only when a faithful producer/source exists; when it does not, defer with the design on record rather than scaffold an always-empty pipeline.**
 
 **Related:** LRN-3; ADR-062 (PE-3 shipped, LRN-3 aggregation deferred), ADR-052 (assembler pattern); LRN-2 (`LearningMetricsCalculator`/`LearningObservation`); LRN-3 Option B design doc.
+
+---
+
+## ADR-064 — Distributed `EventBus` over Kafka: `KafkaEventBus` behind an optional dependency (SCALE-2 Kafka binding)
+
+**Status:** Accepted (implemented — SCALE-2 Kafka binding, 2026-07-31) · **SCALE-2 In Progress** (live cross-instance E2E user-run)
+
+**Context.**
+SCALE-2's `EventBus` seam (ADR-060) + Spring bridge (ADR-061) run in-process. The **distributed** binding was deferred (ADR-053) until needed. Now: make the *same* bus work **cross-instance** over the provisioned Kafka — without forcing Kafka weight on modules that don't use it, and keeping in-process the zero-config default.
+
+**Decision (Option A).**
+- **`KafkaEventBus` in `core.event`**, beside `InProcessEventBus`; **`spring-kafka` is an *optional* dependency of `core`** (not transitive). The bean is **`@ConditionalOnClass(KafkaTemplate)` + `@ConditionalOnProperty(aiqaos.events.transport=kafka)`** — evaluated via bytecode, so the class never loads when Kafka is absent or unselected.
+- **`InProcessEventBus` guarded** `@ConditionalOnProperty(...=in-process, matchIfMissing=true)` → the default, so exactly one `EventBus` bean exists.
+- **Shared `EventDispatch`** (extracted) does the local type-hierarchy dispatch for both buses.
+- **Wire format:** an `EventEnvelope {type (FQN), payload}` JSON so the consumer reconstructs the exact `BaseEvent` subtype (non-invasive — no polymorphic type info on `BaseEvent`). **Per-instance consumer group** → broadcast (every instance receives every event).
+- **Gateway opts in:** `spring-kafka` dependency + `compose`-profile `aiqaos.events.transport` (env-flippable, **default in-process** so the common dev flow needs no Kafka).
+
+**Consequences.**
+- *Positive:* the same seam works cross-JVM when enabled; **zero Kafka weight by default** (optional dep + conditional beans); serialize/receive/dispatch + type reconstruction unit-proven; full reactor green with the default unchanged.
+- *Negative / trade-off:* **live cross-instance delivery is user-run** (needs Kafka up + two instances); single topic with a per-type key (per-type topics a later optimisation); delivery/ordering guarantees are Kafka's defaults (no extra retry/idempotency layer yet).
+- *Imposed rule:* a distributed binding lives behind an **optional dependency + conditional beans**; the seam is the abstraction and the transport is **config-selected**, defaulting to in-process.
+
+**Related:** SCALE-2; ADR-060 (the `EventBus` seam), ADR-061 (Spring bridge), ADR-053 (Kafka container provisioned); FI-SCALE2-A (remaining publisher migration, independent).
 
 ---
 
