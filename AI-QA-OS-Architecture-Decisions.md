@@ -93,6 +93,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-062](#adr-062--serve-dashboard-read-models-by-aggregating-persisted-data-pe-3-from-eval_results-lrn-3-deferred-no-faithful-source) | Serve dashboard read-models by aggregating persisted data; PE-3 from `eval_results`, LRN-3 deferred (no faithful source) | Accepted |
 | [ADR-063](#adr-063--lrn-3-dashboard-deferred-its-observation-pipeline-is-unbuilt-no-empty-dashboard-scaffolding) | LRN-3 dashboard deferred: its observation pipeline is unbuilt; no empty-dashboard scaffolding | Accepted |
 | [ADR-064](#adr-064--distributed-eventbus-over-kafka-kafkaeventbus-behind-an-optional-dependency-scale-2-kafka-binding) | Distributed `EventBus` over Kafka: `KafkaEventBus` behind an optional dependency (SCALE-2 Kafka binding) | Accepted |
+| [ADR-065](#adr-065--distributed-executionjobqueue-over-redis-streams-redisstreamexecutionjobqueue-behind-an-optional-dependency-scale-1) | Distributed `ExecutionJobQueue` over Redis Streams: `RedisStreamExecutionJobQueue` behind an optional dependency (SCALE-1) | Accepted |
 
 ---
 
@@ -1437,6 +1438,27 @@ SCALE-2's `EventBus` seam (ADR-060) + Spring bridge (ADR-061) run in-process. Th
 - *Imposed rule:* a distributed binding lives behind an **optional dependency + conditional beans**; the seam is the abstraction and the transport is **config-selected**, defaulting to in-process.
 
 **Related:** SCALE-2; ADR-060 (the `EventBus` seam), ADR-061 (Spring bridge), ADR-053 (Kafka container provisioned); FI-SCALE2-A (remaining publisher migration, independent).
+
+---
+
+## ADR-065 — Distributed `ExecutionJobQueue` over Redis Streams: `RedisStreamExecutionJobQueue` behind an optional dependency (SCALE-1)
+
+**Status:** Accepted (implemented — SCALE-1 distributed queue, 2026-07-31) · **SCALE-1 In Progress** (live cross-instance E2E user-run)
+
+**Context.**
+SCALE-1's `ExecutionJobQueue` seam + `InProcessExecutionJobQueue` (single-JVM worker pool) exist; the remaining piece is the **distributed** binding so jobs run on a worker pool **spanning nodes**. Crucially, a job queue is the **opposite of the SCALE-2 event bus**: it needs **competing consumers** (exactly one worker per job) and the result must return to the *submitter* — so it cannot reuse the broadcast `EventBus`; it needs a real work queue. Redis is provisioned; the seam's javadoc names "Redis-Streams" as the target.
+
+**Decision (Option A — Redis Streams).**
+- **`RedisStreamExecutionJobQueue`** (`execution.queue`): `submit` → JSON job (`@JsonCreator` on the immutable `ExecutionJob`/`ExecutionJobResult`) → `XADD execution:jobs`; a per-instance worker consumes via the shared consumer group `execution-workers` (competing consumers), runs it through the shared **`ExecutionJobRunner`**, `SET`s `execution:result:<jobId>` (TTL), and `XACK`s; `awaitResult` polls the result key. **At-least-once** — unacked messages stay pending; each worker recovers its **own** pending on startup (crash-restart). Cross-instance `XAUTOCLAIM` reclaim of a permanently-dead worker is a **documented follow-up**.
+- **Optional dependency + conditional selection** (the ADR-064 pattern): `spring-data-redis` `<optional>` in `execution`; `@ConditionalOnClass(StringRedisTemplate)` + `@ConditionalOnExpression(enabled AND provider=redis)`. `InProcessExecutionJobQueue` guarded `@ConditionalOnExpression(enabled AND provider!=redis)` = the default. Queueing is **off entirely by default** → `ExecutionStep` runs inline (non-breaking).
+- **Gateway opts in** via env-flippable `AIQAOS_EXECUTION_QUEUE_ENABLED`/`_PROVIDER` (Redis already on its classpath via `brain→memory`).
+
+**Consequences.**
+- *Positive:* execution decoupled across instances when enabled; **zero Redis weight by default**; the shared runner + JSON round-trip are unit-proven; full reactor green with the default path unchanged. `ExecutionJob`/`Result` are now cleanly serialisable (`@JsonCreator`).
+- *Negative / trade-off:* **live cross-instance distribution is user-run** (needs Redis + ≥2 instances — and a full job also needs Playwright, so doubly environment-bound); cross-instance `XAUTOCLAIM` reclaim, per-type partitioning, and backpressure are follow-ups.
+- *Imposed rule:* a distributed **job queue** uses competing consumers over Redis Streams with `XACK` durability (not the broadcast event bus); the seam is the abstraction, the provider is config-selected, default in-process.
+
+**Related:** SCALE-1; `ExecutionJobQueue`/`InProcessExecutionJobQueue` seam, ADR-064 (optional-dep + conditional pattern), ADR-053 (Redis provisioned), SCALE-2 (contrast: broadcast vs competing-consumers).
 
 ---
 
