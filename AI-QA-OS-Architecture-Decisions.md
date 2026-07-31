@@ -3,7 +3,7 @@
 **Version:** 1.0.0
 **Document Type:** Architecture Decision Log
 **Document Status:** Active
-**Last Updated:** 2026-07-22
+**Last Updated:** 2026-07-30
 **Source of truth:** [`AI-QA-OS-Documentation.md`](./AI-QA-OS-Documentation.md) · [`AI-QA-OS-Improvement-Roadmap.md`](./AI-QA-OS-Improvement-Roadmap.md) (finalized)
 
 > **Purpose.** Record the *why* behind AI-QA-OS's major architectural decisions so future contributors do not re-litigate settled questions or unknowingly violate them. These ADRs **document existing decisions** — they do not introduce new architecture. Where a decision is realised or extended by a roadmap item, the ID is linked; implementation status lives in [`AI-QA-OS-Implementation-Tracker.md`](./AI-QA-OS-Implementation-Tracker.md).
@@ -56,6 +56,42 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-025](#adr-025--llm-cost-quota-enforcement-at-the-provider-choke-point-soft-cap) | LLM cost-quota enforcement at the provider choke point (soft cap) | Accepted |
 | [ADR-026](#adr-026--unified-ai-audit-trail-by-aggregation-over-run-keyed-sources) | Unified AI audit trail by aggregation over run-keyed sources | Accepted |
 | [ADR-027](#adr-027--deterministic-weighted-prompt-ab-routing--leaderboard-over-pe-1-scores) | Deterministic weighted prompt A/B routing + leaderboard over PE-1 scores | Accepted |
+| [ADR-028](#adr-028--durable-version-registry-with-pinrollback-behind-a-store-seam-prompt-now-generic-for-model) | Durable version registry with pin/rollback behind a store seam (prompt now, generic for model) | Accepted |
+| [ADR-029](#adr-029--responsible-ai-policy-as-a-config-driven-guardrail-at-the-sec-3-boundary-opa-deferred) | Responsible-AI policy as a config-driven guardrail at the SEC-3 boundary (OPA deferred) | Accepted |
+| [ADR-030](#adr-030--real-pii-masking-in-ai-qa-os-testdata-classification-driven-pluggable-strategies-format-preserving-default) | Real PII masking in `ai-qa-os-testdata`: classification-driven, pluggable strategies, format-preserving default | Accepted |
+| [ADR-031](#adr-031--close-the-continuous-learning-loop-via-recorded-improvement-proposals-adoption-gated-on-lrn-4) | Close the continuous-learning loop via recorded improvement proposals; adoption gated on LRN-4 | Accepted |
+| [ADR-032](#adr-032--safe-adoption-gate-core-contract--brain-impl-reusing-the-confidence-gate--an-eval-threshold) | Safe-adoption gate: core contract + Brain impl reusing the confidence gate + an eval threshold | Accepted |
+| [ADR-033](#adr-033--autonomous-locator-healing-deterministic-heuristic-healer-behind-a-seam--confidence-gated-auto-apply) | Autonomous locator healing: deterministic heuristic healer behind a seam + confidence-gated auto-apply | Accepted |
+| [ADR-034](#adr-034--learning-metrics-computed-in-module-over-a-supplied-observation-series) | Learning metrics computed in-module over a supplied observation series | Accepted |
+| [ADR-035](#adr-035--healing-approval-strict-confidence-tier-for-script-edits--in-module-approval-lifecycle) | Healing approval: strict confidence tier for script edits + in-module approval lifecycle | Accepted |
+| [ADR-036](#adr-036--plugin-architecture-in-process-contract--lifecycle-registry-with-semver--permission-governance) | Plugin architecture: in-process contract + lifecycle registry with semver + permission governance | Accepted |
+| [ADR-037](#adr-037--integration-plugins-normalised-on-the-plg-1-contract-via-delegating-adapters--governed-registrar) | Integration plugins normalised on the PLG-1 contract via delegating adapters + governed registrar | Accepted |
+| [ADR-038](#adr-038--learning-loop-closed-end-to-end-lrn-1-proposals-gated-through-the-lrn-4-safe-adoption-gate) | Learning loop closed end-to-end: LRN-1 proposals gated through the LRN-4 safe-adoption gate | Accepted |
+| [ADR-039](#adr-039--self-healing-loop-closed-end-to-end-heal-1-locator-proposal-governed-by-the-heal-2-approval-workflow) | Self-healing loop closed end-to-end: HEAL-1 locator proposal governed by the HEAL-2 approval workflow | Accepted |
+| [ADR-040](#adr-040--governance-loop-closed-version-promotion-policy-gated-by-the-responsible-ai-policy) | Governance loop closed: version promotion policy-gated by the Responsible-AI policy | Accepted |
+| [ADR-041](#adr-041--multi-tenancy-foundation-tenant-context-contract-in-core-with-thread-local--mdc-propagation) | Multi-tenancy foundation: tenant-context contract in `core` with thread-local + MDC propagation | Accepted |
+| [ADR-042](#adr-042--ai-qa-os-tenant-module-tenant-registry-seam--active-only-resolver-over-the-core-context) | `ai-qa-os-tenant` module: tenant registry seam + active-only resolver over the `core` context | Accepted |
+| [ADR-043](#adr-043--gateway-tenant-resolution-filter-request-scoped-tenant-binding-ent-1-fi-ent1-b) | Gateway tenant-resolution filter: request-scoped tenant binding (ENT-1 FI-ENT1-B) | Accepted |
+| [ADR-044](#adr-044--ai-qa-os-notification-module-single-governed-egress-point-via-a-channel-sender-spi) | `ai-qa-os-notification` module: single governed egress point via a channel-sender SPI | Accepted |
+| [ADR-045](#adr-045--first-class-agent-roster-catalog-agt-1-increment) | First-class agent roster catalog (AGT-1 increment) | Accepted |
+| [ADR-046](#adr-046--tenant-scoped-cross-run-healing-memory-over-memorystore) | Tenant-scoped cross-run healing memory over `MemoryStore` | Accepted |
+| [ADR-047](#adr-047--healing-analytics-read-model-via-a-pure-assembler-heal-3-backend-increment) | Healing analytics read-model via a pure assembler (HEAL-3 backend increment) | Accepted |
+| [ADR-048](#adr-048--extension-sdk-uniform-extension-spi-in-core--governed-registry-in-integration) | Extension SDK: uniform `Extension` SPI in `core` + governed registry in `integration` | Accepted |
+| [ADR-049](#adr-049--centralised-eventnotification-routing--templating-over-mod-2) | Centralised event→notification routing + templating over MOD-2 | Accepted |
+| [ADR-050](#adr-050--learning-dashboard-read-model--health-signal-in-learning-lrn-3-backend-increment) | Learning-dashboard read-model + health signal in `learning` (LRN-3 backend increment) | Accepted |
+| [ADR-051](#adr-051--prompt-quality-read-model-over-the-pe-2-leaderboard-pe-3-backend-increment) | Prompt-quality read-model over the PE-2 leaderboard (PE-3 backend increment) | Accepted |
+| [ADR-052](#adr-052--rbac-admin-read-model-over-the-security-entities-ent-4-backend-increment) | RBAC admin read-model over the security entities (ENT-4 backend increment) | Accepted |
+| [ADR-053](#adr-053--local-infrastructure-stack-a-compose-spring-profile-over-provisioned-containers-with-real-service-bindings-deferred-to-their-consumers) | Local infrastructure stack: a `compose` Spring profile over provisioned containers, with real service bindings deferred to their consumers | Accepted |
+| [ADR-054](#adr-054--row-level-persistence-tenancy-via-hibernate-tenantid-discriminator-fi-ent1-c-pilot) | Row-level persistence tenancy via Hibernate `@TenantId` discriminator (FI-ENT1-C pilot) | Accepted |
+| [ADR-055](#adr-055--tenant-scoped-rbac-users-tenant-owned-roles-a-global-catalog-jwt-authoritative-tenant-fi-ent1-d) | Tenant-scoped RBAC: users tenant-owned, roles a global catalog, JWT-authoritative tenant (FI-ENT1-D) | Accepted |
+| [ADR-056](#adr-056--tenant-scoped-memory-cost--artifact-tenantid-on-the-durable-rows--tenant-key-prefix-for-blobs-fi-ent1-e) | Tenant-scoped memory, cost & artifact: `@TenantId` on the durable rows + tenant key-prefix for blobs (FI-ENT1-E) | Accepted |
+| [ADR-057](#adr-057--tenant-scope-the-remaining-operational-tables-catalogs-global-telemetry-system-scoped-fi-ent1-c-extension) | Tenant-scope the remaining operational tables; catalogs global, telemetry system-scoped (FI-ENT1-C extension) | Accepted |
+| [ADR-058](#adr-058--credential-entities-session-api-key-are-tenant-attributed-not-tenantid-discriminated-fi-ent1-d-slice-2) | Credential entities (session, API key) are tenant-attributed, not `@TenantId`-discriminated (FI-ENT1-D slice 2) | Accepted |
+| [ADR-059](#adr-059--runtime-tenant-scoping-of-short-term-memory-vector-search-and-local-artifacts-fi-ent1-e-slice-2) | Runtime tenant-scoping of short-term memory, vector search, and local artifacts (FI-ENT1-E slice 2) | Accepted |
+| [ADR-060](#adr-060--in-process-eventbus-coordination-seam-over-core-baseevent-distributed-binding-deferred-scale-2) | In-process `EventBus` coordination seam over `core` `BaseEvent`; distributed binding deferred (SCALE-2) | Accepted |
+| [ADR-061](#adr-061--bridge-the-core-eventbus-seam-to-spring-events-during-publisher-migration-fi-scale2-a) | Bridge the `core` `EventBus` seam to Spring events during publisher migration (FI-SCALE2-A) | Accepted |
+| [ADR-062](#adr-062--serve-dashboard-read-models-by-aggregating-persisted-data-pe-3-from-eval_results-lrn-3-deferred-no-faithful-source) | Serve dashboard read-models by aggregating persisted data; PE-3 from `eval_results`, LRN-3 deferred (no faithful source) | Accepted |
+| [ADR-063](#adr-063--lrn-3-dashboard-deferred-its-observation-pipeline-is-unbuilt-no-empty-dashboard-scaffolding) | LRN-3 dashboard deferred: its observation pipeline is unbuilt; no empty-dashboard scaffolding | Accepted |
 
 ---
 
@@ -1087,6 +1123,296 @@ Outbound comms were scattered; stakeholders need run-complete, failure, and appr
 - *Imposed rule:* run/approval notifications are built by templating an event and dispatched through the single `NotificationService` egress point.
 
 **Related:** ENT-2; MOD-2/ADR-044 (`NotificationService` egress), AI-2 (approval flow this feeds), event publishers (`WorkflowEventPublisher`/etc. — deferred sources); FI-ENT2-A/B.
+
+---
+
+## ADR-050 — Learning-dashboard read-model + health signal in `learning` (LRN-3 backend increment)
+
+**Status:** Accepted (implemented — LRN-3 read-model, 2026-07-29) · LRN-3 remains In Progress
+
+**Context.**
+LRN-3 makes the improvement trend visible so stakeholders trust autonomous operation — a dashboard view over LRN-2's metrics. LRN-2's `LearningMetrics` live in `ai-qa-os-learning`, and the **dashboard module does not depend on `learning`**, so the read-model that composes them belongs in `learning`; in a no-frontend environment the validatable substance is that composition + a health signal, not the UI.
+
+**Decision.**
+- **Read-model in `learning` (§0.4-A)** — a pure `LearningDashboardAssembler.assemble(LearningMetrics) → LearningDashboardView` (score, success rate, confidence-history series, trend, sample count) that derives a **`LearningHealth`** signal (`AT_RISK` when the trend is `REGRESSING` **or** the learning score `< 0.5`, else `HEALTHY`) plus a human headline. The HEAL-3/GOV-1 assembler pattern.
+- **UI + controller deferred** — the dashboard UI is frontend; the dashboard-module controller/endpoint needs a `dashboard → learning` dependency (FI-LRN3-A); a persisted metric time-series is FI-LRN3-B. **LRN-3 stays In Progress.**
+
+**Consequences.**
+- *Positive:* learning health is now a programmatic, governance-useful signal (a stop-loss hook — an `AT_RISK` learning loop is visible), unit-proven (6 tests); additive no-arg `@Component` assembler, no blast radius.
+- *Negative / trade-off:* no UI rendered, no endpoint, no historical time-series — LRN-3 is not Completed.
+- *Imposed rule:* the learning dashboard consumes a composed read-model with an explicit health signal, not raw metrics.
+
+**Related:** LRN-3; LRN-2/ADR-034 (`LearningMetrics` consumed), LRN-4 (the `REGRESSING`/at-risk signal can feed a stop-loss), HEAL-3/ADR-047 & GOV-1/ADR-026 (assembler pattern), OBS-3 (dashboards suite); FI-LRN3-A/B.
+
+---
+
+## ADR-051 — Prompt-quality read-model over the PE-2 leaderboard (PE-3 backend increment)
+
+**Status:** Accepted (implemented — PE-3 read-model, 2026-07-29) · PE-3 remains In Progress
+
+**Context.**
+PE-3 lets prompt engineers see scores, standings, and leaderboard at a glance. PE-2's `LeaderboardEntry` rows live in `ai-qa-os-eval`, and the **dashboard module does not depend on `eval`**, so the read-model composing them belongs in `eval`; the validatable substance in a no-frontend environment is the composition, not the UI. Completes the eval spine MOD-3 → AI-3 → PE-1 → PE-2 → PE-3.
+
+**Decision.**
+- **Read-model in `eval` (§0.4-A)** — a pure `PromptQualityAssembler.summarize(List<LeaderboardEntry>) → PromptQualitySummary` (total versions, best/worst version + score, average, spread, ranked standings). The HEAL-3/LRN-3 assembler pattern.
+- **UI, controller, and regressions deferred** — the dashboard UI is frontend; the controller/endpoint needs a `dashboard → eval` dependency (FI-PE3-A); regression detection vs the AI-3 committed baseline needs the baseline source (FI-PE3-B); per-execution history over `PromptExecutionEntity` is FI-PE3-C. **PE-3 stays In Progress.**
+
+**Consequences.**
+- *Positive:* prompt-quality standings + score stats are now a programmatic read-model, unit-proven (4 tests); additive no-arg `@Component` assembler, no blast radius; completes the eval spine's read side.
+- *Negative / trade-off:* no UI/endpoint, and "regressions" (named in the roadmap why) waits on the AI-3 baseline (FI-PE3-B) — PE-3 is not Completed.
+- *Imposed rule:* the prompt-quality dashboard consumes a composed read-model over the leaderboard, not raw entries.
+
+**Related:** PE-3; PE-2/ADR-027 (`LeaderboardEntry`/`PromptLeaderboard` consumed), PE-1 (`PromptScore`), AI-3 (regression baseline — deferred source), HEAL-3/LRN-3 (assembler pattern), DX-4 (prompt playground — complements), OBS-3; FI-PE3-A/B/C.
+
+---
+
+## ADR-052 — RBAC admin read-model over the security entities (ENT-4 backend increment)
+
+**Status:** Accepted (implemented — ENT-4 read-model, 2026-07-29) · ENT-4 remains In Progress
+
+**Context.**
+The RBAC entities (users, roles, permissions, sessions) exist in `ai-qa-os-security` but had no admin surface — administration would be raw SQL. ENT-4 activates them. The dashboard module already depends on `security`, so it can read them directly; in a no-frontend environment the validatable substance is the read-model, not the UI.
+
+**Decision.**
+- **Read-model in `dashboard` (§0.4-A)** — a pure `RbacAdminAssembler.summarize(users, roles, permissions) → RbacAdminSummary` (user/role/permission counts, security posture — disabled/locked/MFA-enabled — and safe per-user `AdminUserView`s). **Never exposes secrets** (no password hash / MFA secret). The GOV-1/HEAL-3 assembler pattern.
+- **Write ops + UI deferred** — mutating admin operations (create/disable user, assign role) are the highest-risk part and belong with the UI + careful authz (FI-ENT4-A); the controller/endpoint (FI-ENT4-B) and user↔role mapping (no direct join accessor on `UserEntity` — FI-ENT4-C) are deferred. **ENT-4 stays In Progress.**
+
+**Consequences.**
+- *Positive:* the RBAC state (identity + security posture) is now a programmatic, secret-free read-model, unit-proven (3 tests); additive no-arg `@Component` (dashboard context green); no new persistence — exposes what exists.
+- *Negative / trade-off:* read-only — no user/role administration or UI yet (FI-ENT4-A/B); user↔role mapping absent (FI-ENT4-C) — ENT-4 is not Completed.
+- *Imposed rule:* the admin surface exposes RBAC state via a secret-free read-model; mutating auth data is a deliberate, authz-guarded follow-up.
+
+**Related:** ENT-4; `ai-qa-os-security` RBAC entities (`UserEntity`/`RoleEntity`/`PermissionEntity`), GOV-1/HEAL-3 (assembler pattern), SEC-1 (auth), ENT-1 (tenancy — users carry `tenantId`); FI-ENT4-A/B/C.
+
+---
+
+## ADR-053 — Local infrastructure stack: a `compose` Spring profile over provisioned containers, with real service bindings deferred to their consumers
+
+**Status:** Accepted (implemented — Phase 1, Checkpoints 1–4, 2026-07-30)
+
+**Context.**
+A large block of remaining work is *infrastructure-gated* — ENT-1 enforcement (FI-ENT1-C/D/E), SCALE-1/SCALE-2, ENT-5, and the dashboard write paths cannot be validated without a real database, broker, and object store. The `deployment/docker` stack had only Postgres/Redis/Qdrant/otel, carried a DB-name mismatch, and there was no local Spring profile pointing the apps at the containers. The naïve reading of the Phase 1 plan was "add Kafka + MinIO + health indicators for all of it." Grounding during implementation showed that most of the target Java code is **stub or absent**, which would make those health indicators theatre.
+
+**Decision.**
+- **Provision the full local stack** in `deployment/docker/docker-compose.yml`: Postgres (DB reconciled to `ai_qa_os_dashboard`), Redis, Qdrant, **Kafka** (`apache/kafka` KRaft — no Zookeeper; Redpanda a drop-in alt), **MinIO** + a one-shot bucket initializer (`aiqaos-artifacts`/`aiqaos-backups`), healthchecks on each; the containerised `gateway` sits behind `--profile apps`, inspection UIs behind `--profile tools`. Dev-default creds are overridable via `.env` (SEC-2).
+- **A `compose` Spring profile lives in each app's own resources** (`ai-qa-os-gateway`, `ai-qa-os-dashboard`), *not* in `ai-qa-os-config` — neither app depends on the config module and there is no `spring.config.import`, so config-module YAML would never load. Gateway is the sole Flyway migration owner (ADR-024); dashboard runs with Flyway off.
+- **Wire only the real binding — Redis short-term memory.** `RedisMemoryStore` + `spring-boot-starter-data-redis` already exist on the gateway classpath (via `brain → memory`), so the profile sets `aiqaos.memory.shortterm.provider=redis` and Spring Boot's auto `RedisHealthIndicator` surfaces it — no custom code.
+- **Defer the Qdrant/Kafka/MinIO Java bindings to their consuming features.** `QdrantStoreClient` is a no-op stub (vector provider stays `in-memory`); there is zero Kafka usage anywhere (no producer to health-check); the `ObjectStorageClient` seam is real but its binding is unvalidatable in this environment and the interface javadoc already defers it — the MinIO client is deferred to **ENT-5** activation. Provisioning the *containers* now makes each later binding a thin, validatable addition.
+- **`verify-infra.sh` (T10)** — a one-shot health verifier for the whole stack (required: postgres/redis/kafka/minio/qdrant; informational: Flyway version, MinIO buckets).
+
+**Consequences.**
+- *Positive:* every infra-gated item can now be validated against real infrastructure with one `docker compose up`; the DB-name mismatch is fixed; Flyway single-ownership is enforced by profile; the stack is honest — no scaffolding stands in for services nothing consumes.
+- *Negative / trade-off:* Qdrant/Kafka/MinIO containers sit idle until their features land; runtime infra verification is user-run (the build sandbox has no Docker), so live health is confirmed outside CI for now.
+- *Imposed rule:* **a real service binding (Qdrant client, Kafka producer, MinIO client) is added only when a consuming feature exists.** Containers may be provisioned ahead of bindings; bindings must not be built ahead of consumers. This mirrors the seam-discipline rule (ADR-010/ADR-015): a contract/binding is justified by a real implementer, not by anticipated need.
+
+**Related:** Phase 1 Infrastructure Technical Design; ADR-024 (single migration owner + per-service pools); ADR-003 (Memory as a tiered store); SCALE-3 (Qdrant vector binding — deferred consumer), SCALE-2 (events/Kafka — deferred consumer), ENT-5 (backups/MinIO — deferred consumer); ENT-1 (tenancy enforcement — unblocked by real DB); SEC-2 (env-injected creds); ADR-010/ADR-015 (seam discipline).
+
+---
+
+## ADR-054 — Row-level persistence tenancy via Hibernate `@TenantId` discriminator (FI-ENT1-C pilot)
+
+**Status:** Accepted (implemented — FI-ENT1-C pilot, 2026-07-30) · **ENT-1 remains In Progress**
+
+**Context.**
+The ENT-1 foundation (ADR-041) and the gateway filter (ADR-043) bind a `TenantContext` per request, but **nothing isolates data** — 50 `@Entity` classes share one Postgres schema with no tenant boundary. Phase 1 (ADR-053) provisioned real Postgres so isolation can finally be validated. A data-isolation boundary must be **secure-by-default**: a developer forgetting to add a tenant clause must not leak cross-tenant rows. Spring Boot 3.3 → Hibernate 6.5 offers native discriminator multi-tenancy.
+
+**Decision.**
+- **Mechanism:** Hibernate native **discriminator multi-tenancy** (§0.4-A of the FI-ENT1-C design). A `@TenantId String tenantId` column on each tenant-owned entity; a `CurrentTenantIdentifierResolver<String>` (`TenantIdentifierResolver`) bridging `TenantContextHolder` — **unbound ⇒ `SYSTEM_TENANT`** (never null, never an arbitrary tenant) — registered with Hibernate by a `HibernatePropertiesCustomizer` (`TenantHibernateCustomizer`). Hibernate then **auto-appends `WHERE tenant_id = ?` on read and stamps `tenant_id` on write** — application code never sets or queries it.
+- **Pilot aggregate (this slice, 7 entities):** `ModuleEntity`, `TestCaseEntity` (core); `ExecutionEntity`/`ExecutionStepEntity`/`ExecutionArtifactEntity` (execution); `WorkflowExecutionEntity`, `HumanReviewEntity` (orchestration) — each `implements Tenanted` + `@TenantId`. Migration **V17** (gateway-owned, ADR-024) adds `tenant_id VARCHAR(64) NOT NULL DEFAULT '__system__'` + an index per table, **backfilling legacy rows to the system tenant** so current no-`X-Tenant-ID` flows keep working.
+- **Type:** String discriminator, matching `TenantContext` (`SYSTEM_TENANT = "__system__"`). `UserEntity`'s pre-existing `UUID tenant_id` is a separate RBAC dimension — reconciled in **FI-ENT1-D**, not here.
+
+**Consequences.**
+- *Positive:* isolation is enforced by the ORM, not by developer memory — the property that matters for a security boundary; least code; the pilot proves the pattern end-to-end; resolver unit-proven (5 tests); full reactor green (22 modules).
+- *Negative / trade-off:* only the 7 pilot entities are isolated (reporting/intelligence/brain/eval/agents follow in later slices, same mechanism); **native SQL bypasses the discriminator** — tenant-owned native queries must scope `tenant_id` by hand (rule below); **`@DataJpaTest` slices** don't scan `@Component`s, so they must `@Import(TenantHibernateCustomizer.class)` (done for `WorkflowExecutionRepositoryTest`); **true cross-tenant isolation is user-run** (needs real Postgres with two tenants' data). ENT-1 stays In Progress.
+- *Imposed rule:* a tenant-owned entity **declares `@TenantId` + implements `Tenanted`**; the discriminator is a **String** matching `TenantContext`; **native queries on tenant-owned tables must scope `tenant_id` explicitly** (Hibernate cannot rewrite them); slice tests that touch a tenant-owned entity import the tenancy customizer.
+
+**Related:** ENT-1; FI-ENT1-C; ADR-041 (tenant-context contract), ADR-043 (gateway tenant filter), ADR-053 (infra — real DB), ADR-024 (Flyway single owner); FI-ENT1-D (tenant-scoped RBAC — reconciles `UserEntity`'s UUID), FI-ENT1-E (tenant-scoped memory/cost/artifact).
+
+---
+
+## ADR-055 — Tenant-scoped RBAC: users tenant-owned, roles a global catalog, JWT-authoritative tenant (FI-ENT1-D)
+
+**Status:** Accepted (implemented — FI-ENT1-D, 2026-07-30) · **ENT-1 remains In Progress**
+
+**Context.**
+ADR-054 isolated the test-management aggregate, but the identity layer lagged: `UserEntity.tenantId` was a **`UUID`** (out of sync with the String `TenantContext`/`@TenantId` contract), `username`/`email` were **globally unique**, and **nothing made authentication tenant-aware** — the request tenant came from the **spoofable `X-Tenant-ID` header** (ADR-043), and the user was loaded globally by id. A token minted for tenant A could act against any tenant. A data-isolation boundary must derive the authenticated tenant from something **trusted**.
+
+**Decision.**
+- **Users are tenant-owned; roles/permissions are a global catalog (§0.4-A).** `UserEntity.tenantId` **UUID → String**, `@TenantId` + `implements Tenanted` (reuses the ADR-054 resolver — no new wiring); `username`/`email` unique **per tenant** (`ux_users_tenant_username`/`_email`). `RoleEntity`/`PermissionEntity`/`RolePermissionEntity` stay global (platform-defined roles assigned to tenant users). Migration **V18** reconciles the column type (UUID→VARCHAR, NULL→`__system__`) and swaps global-unique → per-tenant-unique.
+- **The JWT is the authoritative tenant for authenticated requests.** `JwtAuthenticationFilter` binds the `TenantContext` from the **signed token's `tenantId` claim** *before* loading the user (so `findById` is `@TenantId`-filtered) and for the whole downstream leg, restoring the previous context after. The gateway `TenantContextFilter` **yields to an already-bound tenant** — so tenant resolution is correct regardless of filter ordering, and the untrusted header is ignored for authenticated calls. Login (unauthenticated) still resolves the tenant from `X-Tenant-ID` (the login request names its tenant); the minted token carries it.
+
+**Consequences.**
+- *Positive:* a token for tenant A **cannot resolve a user in tenant B** (→ 401) — proven by unit test; identity is tenant-isolated; the authenticated tenant is trusted (signed token), not spoofable; the tenant id type is reconciled to the `core` String contract. Full reactor green (22 modules).
+- *Negative / trade-off:* user **satellites** (`UserSessionEntity`, `ApiKeyEntity`, `PasswordHistoryEntity`) and `SecurityAuditEntity` attribution are **tenant-scoped / attributed as of FI-ENT1-D slice 2 (2026-07-30)** via `@TenantId` and `V21` migration; **no per-tenant custom roles** (global catalog); the ENT-4 admin read-model returns only the **current tenant's** users (correct for tenancy); **true multi-tenant login E2E is user-run** (needs real Postgres with users in two tenants). ENT-1 stays In Progress.
+- *Imposed rule:* **an authenticated request derives its tenant from the signed JWT, never from the `X-Tenant-ID` header**; identity (`username`/`email`) is unique **per tenant**; the header is authoritative only on the unauthenticated login path; any filter binding tenant yields to an already-bound (trusted) tenant.
+
+**Related:** ENT-1; FI-ENT1-D; ADR-041 (tenant-context contract), ADR-043 (gateway tenant filter — now yields to the token tenant), ADR-054 (persistence tenancy mechanism, reused), SEC-1 (auth), SEC-2 (secrets); FI-ENT1-E (tenant-scoped memory/cost/artifact), FI-ENT1-D slice 2 (user satellites + audit attribution — completed 2026-07-30).
+
+---
+
+## ADR-056 — Tenant-scoped memory, cost & artifact: `@TenantId` on the durable rows + tenant key-prefix for blobs (FI-ENT1-E)
+
+**Status:** Accepted (implemented — FI-ENT1-E, 2026-07-30) · **ENT-1 remains In Progress**
+
+**Context.**
+FI-ENT1-C isolated the test-management aggregate and FI-ENT1-D the user identity. The last enforcement dimension the roadmap names for ENT-1 is **memory retrieval + cost isolation + artifact scoping**. Today: `MemoryNodeEntity`/`ConversationHistoryEntity`/`LLMCostEntity` persist with **no tenant column**; `MemoryMetadata` carried an unused `UUID tenantId`; and while FI-ENT1-C scoped the artifact JPA *row*, the **blob bytes remained cross-tenant addressable** — `ObjectStorageArtifactStore` keyed on a static prefix only.
+
+**Decision.**
+- **Persistence (memory + cost) — reuse ADR-054.** `@TenantId` + `implements Tenanted` on `MemoryNodeEntity`, `ConversationHistoryEntity`, `LLMCostEntity`; migration **V19** adds `tenant_id VARCHAR(64) NOT NULL DEFAULT '__system__'` + index on the three tables (backfilling legacy rows to system). Hibernate auto-stamps/filters — no query changes. `MemoryMetadata.tenantId` reconciled **UUID → String** (contract consistency; zero external callers).
+- **Artifact blobs — tenant key-prefix (§0.4-A).** `ObjectStorageArtifactStore.fullKey = staticPrefix + <tenant> + "/" + key`, tenant from `TenantContextHolder` (unbound ⇒ `__system__`). One shared bucket, isolation by key namespace — storage-agnostic (in-memory now, MinIO later). `store/resolve/exists/delete/list` all route through it, so a tenant cannot read another's bytes by key.
+- **Test wiring:** adding `@TenantId` to `LLMCostEntity` puts a discriminator entity into the **observability** persistence unit, so its `@DataJpaTest`s need the resolver — supplied once via `@Import(TenantHibernateCustomizer.class)` on that module's `TestApplication` (covers all its slice tests).
+
+**Consequences.**
+- *Negative / trade-off:* vector-store **search** filtering (in-memory client filtered as of FI-ENT1-E slice 2; real Qdrant client is a stub — ADR-053), short-term **Caffeine/Redis** key namespacing (`<tenant>:<key>`), and `LocalArtifactStore` path scoping (`<baseDir>/<tenant>/<key>`) are **completed in FI-ENT1-E slice 2 (2026-07-30)**; legacy object-store blobs are addressed under `__system__/`; **cross-tenant invisibility over a real DB is user-run**. ENT-1 non-stub scoping is complete.
+- *Imposed rule:* durable tenant-owned rows declare `@TenantId` + `Tenanted`; shared object-storage keys and local filesystem artifact paths are tenant-namespaced; **adding `@TenantId` to an entity obliges that module's persistence-unit tests to supply the resolver** (module `TestApplication` `@Import`, or per-test `@Import`).
+
+**Related:** ENT-1; FI-ENT1-E; ADR-054 (persistence tenancy mechanism, reused), ADR-055 (RBAC), ADR-053 (deferred vector/object-store bindings), ADR-024 (Flyway single owner), ENT-5 (object-storage artifact store); FI-ENT1-E slice 2 (vector-search / short-term / Local-artifact scoping — completed 2026-07-30).
+
+---
+
+## ADR-057 — Tenant-scope the remaining operational tables; catalogs global, telemetry system-scoped (FI-ENT1-C extension)
+
+**Status:** Accepted (implemented — FI-ENT1-C extension, 2026-07-30) · **ENT-1 remains In Progress**
+
+**Context.**
+FI-ENT1-C/D/E tenant-isolated the test-management aggregate, user identity, and memory/cost/artifact — 11 entities. **~33 entities remained unclassified.** Extending `@TenantId` is mechanical (ADR-054), so the only real decision is **which of the remaining entities are tenant-owned** vs platform-global vs system telemetry — a boundary that must be set deliberately, since over-scoping (e.g. a discriminator on observability) would hide cross-tenant rows from platform operators.
+
+**Decision — conservative boundary (§0.4-A).**
+- **Tenant-owned → `@TenantId` (16, this slice):** the data a tenant *produces* — `ExecutionAuditEntity`; `WorkflowEntity`/`WorkflowStepEntity`; `ReportEntity`/`ReportArtifactEntity`/`FailureAnalysisEntity`/`TrendEntity`; `PromptExecutionEntity`; `AgentExecutionEntity`; `AgentMessageEntity`/`AgentRuntimeEntity`/`AgentTaskEntity`; `DecisionEntity`/`ReasoningTraceEntity`/`LearningEntity`; `EvaluationResultEntity`. Migration **V20** adds `tenant_id` + index (backfill `__system__`).
+- **Platform-global catalog → stay global:** prompt catalog (`PromptTemplateEntity`/`PromptVersionEntity`/`VersionPinEntity`), agent roster (`AgentEntity`), RBAC catalog (`RoleEntity`/`PermissionEntity`/`RolePermissionEntity`, per ADR-055).
+- **System telemetry / audit → stay system-scoped:** all observability entities except `LLMCostEntity` (billing, scoped in FI-ENT1-E), and `SecurityAuditEntity` — operator visibility must span tenants.
+
+**Consequences.**
+- *Positive:* nearly all durable tenant-owned data is now ORM-isolated; platform operators keep cross-tenant telemetry/audit; platform catalogs stay a single source of truth; a pure mechanical reuse of ADR-054 (full reactor green, 22 modules).
+- *Negative / trade-off:* RBAC **satellites** (`UserSessionEntity`/`ApiKeyEntity`/`PasswordHistoryEntity`) remain for FI-ENT1-D slice 2; the classification of a few borderline entities (`LearningEntity`, `EvaluationResultEntity`, `ExecutionAuditEntity`) is a judgment call revisitable later; cross-tenant invisibility over a real DB is user-run.
+- *Imposed rule:* **a tenant owns the data it produces; the platform owns definitions (catalogs) and operator telemetry/audit.** New tenant-owned entities take `@TenantId`; new catalog/telemetry entities stay global/system. Boundary = conservative (Option A).
+
+**Related:** ENT-1; FI-ENT1-C extension; ADR-054 (mechanism, reused), ADR-055 (roles-global precedent), ADR-056 (memory/cost/artifact), ADR-024 (Flyway owner); FI-ENT1-D slice 2 (RBAC satellites).
+
+---
+
+## ADR-058 — Credential entities (session, API key) are tenant-attributed, not `@TenantId`-discriminated (FI-ENT1-D slice 2)
+
+**Status:** Accepted (implemented — FI-ENT1-D slice 2, 2026-07-30) · **ENT-1 remains In Progress**
+
+**Context.**
+The RBAC satellites (`UserSessionEntity`, `ApiKeyEntity`, `PasswordHistoryEntity`) were given `@TenantId` (+ V21 columns). But **sessions and API keys are credentials looked up *before* a tenant is bound** — a token refresh with an expired access token binds no tenant, and an API key *is* what establishes the tenant. `@TenantId`'s auto-filter would scope those lookups by the current/`__system__` tenant and **fail to find the record**, silently breaking refresh and API-key auth. `PasswordHistoryEntity` has no such issue — it is only read inside authenticated, tenant-bound requests.
+
+**Decision.**
+- **`UserSessionEntity` + `ApiKeyEntity` → attribution-only:** keep the `tenant_id` column + `Tenanted` marker, **drop `@TenantId`**. Look them up **tenant-agnostically by their unguessable secret** (refresh token / key hash), then **bind the tenant from the resolved record** — mirrors ADR-055's token-authoritative principle. Login now sets `session.tenantId` explicitly (Hibernate no longer stamps it); `AuthenticationService.refresh` binds the session's tenant before the `@TenantId`-filtered user load.
+- **`PasswordHistoryEntity` keeps `@TenantId`** (tenant-bound access only).
+- **`SecurityAuditEntity`** stays a plain `tenant_id` attribution column (system-scoped, operator cross-tenant visibility — ADR-057); `AuditLogger` persistence remains a deferred stub.
+
+**Consequences.**
+- *Positive:* refresh/logout work with no pre-bound tenant; the unguessable secret is the isolation, with `tenant_id` as attribution + defence-in-depth; consistent with ADR-055. Refresh-binds-tenant unit-proven; full reactor green (22 modules).
+- *Negative / trade-off:* credential entities rely on secret unguessability + an explicit attribution set at creation (login must set the session tenant); real API-key auth is still stubbed (`ApiKeyProvider`) — the rule applies when it is built.
+- *Imposed rule:* **an entity looked up as a credential *before* tenant binding is tenant-attributed (`tenant_id` column), never `@TenantId`-discriminated; the auth flow binds the tenant from the resolved credential.** `@TenantId` is only for entities accessed inside an already-tenant-bound context.
+
+**Related:** ENT-1; FI-ENT1-D slice 2; ADR-055 (credential/token resolves tenant), ADR-054 (`@TenantId` mechanism), ADR-057 (audit system-scoped), ADR-024 (Flyway owner — V21); `AuthenticationService` refresh/login.
+
+---
+
+## ADR-059 — Runtime tenant-scoping of short-term memory, vector search, and local artifacts (FI-ENT1-E slice 2)
+
+**Status:** Accepted (implemented — FI-ENT1-E slice 2, 2026-07-30) · **completes ENT-1 enforcement**
+
+**Context.**
+ADR-056 (FI-ENT1-E slice 1) tenant-scoped the *durable* surfaces — memory/cost rows (`@TenantId`) and object-store blob keys. The remaining ENT-1 surfaces are **non-JPA runtime state**, which `@TenantId` cannot cover: short-term caches (`CaffeineMemoryStore`/`RedisMemoryStore` — key/value, not entities), the in-memory vector index (`InMemoryVectorStoreClient`), and dev-disk artifacts (`LocalArtifactStore`). Each must be explicitly tenant-namespaced or tenant-filtered.
+
+**Decision.**
+- **Short-term memory:** `CaffeineMemoryStore` + `RedisMemoryStore` namespace every cache key as `<tenant>:<key>`, tenant from `TenantContextHolder` (unbound ⇒ `__system__`).
+- **Vector search:** `InMemoryVectorStoreClient.search` filters matches by the current tenant (falling back to `filters.getTenantId()`), so a query for tenant A never returns tenant B's embeddings.
+- **Local artifacts:** `LocalArtifactStore` namespaces disk paths under `<baseDir>/<tenant>/<key>` — the on-disk mirror of `ObjectStorageArtifactStore`'s key-prefix (ADR-056).
+
+**Consequences.**
+- *Positive:* the non-JPA runtime surfaces (short-term memory, in-memory vector index, local files) are now tenant-isolated, so **ENT-1 enforcement is complete across every surface** — durable and in-flight; storage-agnostic and reused from `TenantContextHolder`.
+- *Negative / trade-off:* the **real Qdrant client remains a stub** (ADR-053) — this filter applies to the in-memory dev store; when Qdrant lands, its `search` must apply the same tenant filter **server-side**. Legacy local artifacts are re-addressed under `<tenant>/`.
+- *Imposed rule:* **non-JPA tenant-owned runtime state (caches, in-memory indexes, local files) is explicitly tenant-namespaced/filtered from `TenantContextHolder`**; any real vector/cache binding must carry the same scoping.
+
+**Related:** ENT-1; FI-ENT1-E; ADR-056 (durable persistence + object-store key-prefix), ADR-053 (deferred Qdrant binding), ADR-054 (`@TenantId` mechanism).
+
+---
+
+## ADR-060 — In-process `EventBus` coordination seam over `core` `BaseEvent`; distributed binding deferred (SCALE-2)
+
+**Status:** Accepted (implemented — SCALE-2 seam, 2026-07-30) · **SCALE-2 In Progress**
+
+**Context.**
+`core.event` already held a `BaseEvent` hierarchy (9 typed events), but there was **no unifying coordination seam** — event publishing was fragmented across a Spring-`ApplicationEvent`-based `PlatformEventBus` (in the high-level `integration` module) and per-module publishers (gateway/observability/orchestration/integration). SCALE-2 needs a *swappable* coordination bus: in-process now, distributed (Kafka) later — the same shape as SCALE-1's execution-queue seam.
+
+**Decision.**
+- **`core.event.EventBus`** — `publish(BaseEvent)` + `subscribe(Class<T>, Consumer<T>)`. A Spring-free contract in `core`, so any module already depending on `core` can publish/subscribe without an edge to a higher module.
+- **`InProcessEventBus`** — synchronous default (`@Component`): a `ConcurrentHashMap<Class, handlers>` registry; `publish` walks the event's class hierarchy (a `Consumer<BaseEvent>` sees all, a `Consumer<WorkflowEvent>` sees only workflow events); a throwing handler is isolated (logged) so it can't stop the others. Deterministic, unit-tested, no infrastructure.
+- **Distributed (Kafka) `EventBus` is deferred** — a drop-in of the same interface, built when a real cross-service consumer exists (container provisioned, ADR-053; no scaffolding without a consumer).
+- **Consolidating** `PlatformEventBus` + the per-module publishers onto the seam is an additive follow-up (FI-SCALE2-A) — today's publishers keep working.
+
+**Consequences.**
+- *Positive:* one `core` coordination seam over the existing `BaseEvent`s; the Kafka binding is a clean swap; unit-proven (3 tests); full reactor green (22 modules). Mirrors SCALE-1 exactly.
+- *Negative / trade-off:* synchronous, in-JVM only for now (no ordering/retry/async); the fragmented publishers are not yet migrated (working, so left additive); real distributed coordination waits on the deferred Kafka binding.
+- *Imposed rule:* cross-module coordination flows through the `core` `EventBus` over `BaseEvent`; a distributed binding implements the same interface; no distributed scaffolding without a real consumer.
+
+**Related:** SCALE-2; SCALE-1 (queue-seam pattern), ADR-053 (Kafka container ready, binding deferred), MOD-2/ENT-2 (event→notification routing), `core.event.BaseEvent`; FI-SCALE2-A (publisher consolidation).
+
+---
+
+## ADR-061 — Bridge the `core` `EventBus` seam to Spring events during publisher migration (FI-SCALE2-A)
+
+**Status:** Accepted (implemented — FI-SCALE2-A, 2026-07-30) · **SCALE-2 In Progress**
+
+**Context.**
+SCALE-2 added the `core` `EventBus` seam (ADR-060), but the five existing publishers (`PlatformEventBus`, `Gateway`/`Workflow`/`Observability`/`Integration` publishers) are built on **Spring's `ApplicationEvent` model**, with working `@EventListener` consumers. A full one-shot migration to `BaseEvent`/`EventBus.subscribe` would touch five modules and risk those consumers.
+
+**Decision — bridge, don't rip out (§fork-A).**
+- **`PlatformEventBus` becomes the unified entry point:** `publish(BaseEvent)` routes to the canonical `core` `EventBus` seam; `publishEvent(ApplicationEvent)` stays for the legacy path.
+- **`SpringEventBridge`** subscribes to the `core` `EventBus` (`BaseEvent`) and forwards each event to Spring's `ApplicationEventPublisher`, so **a `BaseEvent` published on the seam still reaches existing `@EventListener` consumers**.
+- **`WorkflowEventPublisher` migrated as the representative proof** — `BaseEvent`s go through the seam (and still reach Spring consumers via the bridge); non-core events fall back to the Spring path. Converted `@Autowired` field → constructor injection.
+- The remaining publishers migrate **opportunistically**; nothing is force-rewritten.
+
+**Consequences.**
+- *Positive:* publishers can adopt the seam without breaking consumers; the seam is the canonical path while Spring remains legacy-inbound; a unit test proves a seam event reaches both a core subscriber and a Spring consumer; full reactor green (22 modules).
+- *Negative / trade-off:* two event models coexist during migration (transient); the bridge runs only where `integration` is on the classpath (not yet a direct app dependency — broader wiring is a follow-up) — the `core` seam itself works everywhere regardless.
+- *Imposed rule:* new coordination publishes `BaseEvent`s via the seam; `SpringEventBridge` keeps legacy `@EventListener` consumers working; the raw `ApplicationEvent` path is legacy-only, retired as publishers migrate.
+
+**Related:** SCALE-2; ADR-060 (the `EventBus` seam); FI-SCALE2-A; `PlatformEventBus`/`SpringEventBridge`/`WorkflowEventPublisher`.
+
+---
+
+## ADR-062 — Serve dashboard read-models by aggregating persisted data; PE-3 from `eval_results`, LRN-3 deferred (no faithful source)
+
+**Status:** Accepted (implemented — PE-3, 2026-07-30; LRN-3 deferred) · **PE-3 & LRN-3 remain In Progress**
+
+**Context.**
+ENT-4/HEAL-3 read-models are a simple `repo.findAll() → assembler`. LRN-3 and PE-3 are not: their assemblers consume **computed** inputs — `LearningMetrics` (from transient `LearningObservation`s fed by the live loop) and a leaderboard (from **running** benchmarks). Neither has a directly-queryable source. The chosen strategy (Option A) is to **aggregate data that is already persisted** into the assembler inputs.
+
+**Decision.**
+- **PE-3 — done.** `dashboard → eval` dependency added; `PromptQualityService` aggregates `EvaluationResultRepository` (`eval_results`): mean `score` per `promptVersion` → ranked `LeaderboardEntry`s → `PromptQualityAssembler`. `GET /api/dashboard/prompt-quality`. Read-only, **no benchmark re-run**.
+- **LRN-3 — deferred (honest data gap).** Aggregating `brain_learning` is **not faithful**: `LearningEntity` carries only `pattern`/`previousDecision`/`result`/`improvement` strings — it lacks the **`success` (boolean)** and **`confidence` (double)** that `LearningObservation` requires. Deriving them would *fabricate* the confidence signal, producing a misleading dashboard. LRN-3 is therefore deferred to **Option B** — the learning loop persisting a faithful metrics/observation snapshot — not built now.
+
+**Consequences.**
+- *Positive:* PE-3 is served from real persisted data with no loop change; the aggregation is pure and unit-proven; the dashboard shows a real leaderboard. The LRN-3 gap is surfaced honestly instead of faked.
+- *Negative / trade-off:* LRN-3 stays unexposed until its producer persists a snapshot (Option B); PE-3 aggregation faithfulness vs live eval output is confirmed only against a real DB (user-run); the dashboard now depends on `eval`.
+- *Imposed rule:* **a dashboard read-model is served by aggregating persisted data; if the persisted data lacks the signal the read-model needs, expose it only after its producer persists a faithful snapshot — never fabricate the missing signal.**
+
+**Related:** PE-3, LRN-3; ADR-052 (assembler pattern), ENT-4/HEAL-3 (repo-query read-models); `EvaluationResultEntity` (`eval_results`), `LearningEntity` (`brain_learning`).
+
+---
+
+## ADR-063 — LRN-3 dashboard deferred: its observation pipeline is unbuilt; no empty-dashboard scaffolding
+
+**Status:** Accepted (decision, 2026-07-30) · **LRN-3 remains In Progress**
+
+**Context.**
+Designing LRN-3's data source (Option B, deferred by ADR-062) revealed the LRN-2 metrics pipeline is **entirely unwired**: `LearningMetricsCalculator.compute` has **no callers**, `LearningObservation` has **no producers**, and no persisted table carries a faithful **`success` + `confidence`** per run (`brain_learning` has neither numeric; `brain_decisions` has confidence but its `decision` string is not run-success). The read-model (`LearningDashboardAssembler`) and calculator are built and waiting. So "Option B" is really **build the observation pipeline** — a producer that captures success (run pass/fail) + confidence (AI-1 gate) at run completion, persists it, and a read path.
+
+**Decision.**
+**Defer LRN-3.** Do **not** build a persistence + recorder half-pipeline with **no producer** — it would show an empty dashboard forever (scaffolding without a producer, contrary to the seam-discipline rule). Keep LRN-3 In Progress; the read-model, assembler, and the **full Option B design** (`AI-QA-OS-LRN3-OptionB-Technical-Design.md`) are on record. Build the pipeline (entity + repo + `V22` + `LearningObservationRecorder` + the **orchestration run-completion hook** + read path + UI) when the learning loop is genuinely integrated or LRN-3 is prioritised.
+
+**Consequences.**
+- *Positive:* honest — no empty-dashboard scaffolding; the read-model/assembler + a concrete build plan are ready; upholds and extends ADR-062's rule.
+- *Negative / trade-off:* LRN-3 is the one of four dashboards (vs ENT-4/HEAL-3/PE-3) left unshipped — because it is the only one with no faithful persisted data source.
+- *Imposed rule:* **a dashboard read-model ships only when a faithful producer/source exists; when it does not, defer with the design on record rather than scaffold an always-empty pipeline.**
+
+**Related:** LRN-3; ADR-062 (PE-3 shipped, LRN-3 aggregation deferred), ADR-052 (assembler pattern); LRN-2 (`LearningMetricsCalculator`/`LearningObservation`); LRN-3 Option B design doc.
 
 ---
 

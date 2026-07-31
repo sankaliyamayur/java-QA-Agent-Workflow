@@ -1,12 +1,14 @@
 # AI-QA-OS — Platform Documentation
 
-**Version:** 1.2.0
+**Version:** 1.2.1
 **Document Type:** Consolidated Platform Documentation
 **Document Status:** Active
-**Last Updated:** 2026-07-22
+**Last Updated:** 2026-07-30
 **Applies To:** `AI-QA-OS-Core` (1.0.0-SNAPSHOT), `ai-qa-os-dashboard-ui` (0.0.0), `AI-QA-OS-Docs` (1.1.0)
 
 > **Scope note.** This document describes the platform **as it exists in the working tree today**, and separately identifies what the design documents specify but the code does not yet implement. Where the two diverge, the divergence is called out explicitly in [§15 Gap Analysis](#15-gap-analysis-design-vs-implementation). Nothing here is aspirational unless it is labelled as such.
+
+> **⚠️ Status-reconciliation banner (2026-07-30).** This narrative was first written at an early snapshot and is refreshed incrementally. Many "gap" and "not built" statements below have since been closed by roadmap items (58 completed to date). **For authoritative, per-item current status, the source of truth is [`AI-QA-OS-Implementation-Tracker.md`](./AI-QA-OS-Implementation-Tracker.md) and the [`AI-QA-OS-Architecture-Decisions.md`](./AI-QA-OS-Architecture-Decisions.md) ADR log (053 ADRs).** Notable changes since the original snapshot: authentication is now real deny-by-default (SEC-1, ADR — toggle `aiqaos.security.enabled`), a strict CSP is in place (SEC-4), the AI Confidence Score gate is implemented (AI-1, ADR-010), the reactor is now **22 modules** (was 20; added `ai-qa-os-tenant` + `ai-qa-os-notification`), and local infrastructure (Postgres/Redis/Qdrant/Kafka/MinIO via a `compose` profile) is provisioned (Phase 1, ADR-053). Individual sections below carry inline corrections where they were most misleading.
 
 ---
 
@@ -98,7 +100,7 @@ Every component must additionally be **Independent, Replaceable, Extensible, Obs
 | Autonomous pipeline | **Working end to end** — nine pipeline steps, with recorded Playwright execution runs on disk |
 | Dashboard UI (React) | **Partially wired** — a minority of pages call the backend; the rest render mock data |
 | Documentation repo | **Framework only** — `00-Foundation/` holds the complete architecture; the `docs/` build log has zero authored steps |
-| Authentication | **Implemented but disabled** — every API path is in the permit-all list |
+| Authentication | **Implemented and enforced** — real deny-by-default chain gated by `aiqaos.security.enabled` (SEC-1); the old `WebSecurityCustomizer.ignoring()` bypass is removed. Set the flag `false` only for open local dev |
 | Test coverage | **Thin** — roughly half the backend modules have tests; the remainder and the UI have effectively none |
 
 ---
@@ -112,7 +114,7 @@ This is a long document. You do not need to read it top to bottom. Follow this p
 | 1 | **Project Vision** | [§1.1–§1.3](#11-what-ai-qa-os-is) | Understand the product before the code — what problem it solves and the "Build Once, Use Everywhere" philosophy |
 | 2 | **Overall Architecture** | [§2.1–§2.2](#21-designed-layer-model) | The layer model and the runtime service map |
 | 3 | **End-to-End Workflow** | [§2.7](#27-end-to-end-ai-workflow) | The single most important diagram — a requirement's full journey |
-| 4 | **Module Dependency Graph** | [§2.14](#214-module-dependency-graph) | How the 20 modules relate; where `core` sits |
+| 4 | **Module Dependency Graph** | [§2.14](#214-module-dependency-graph) | How the 22 modules relate; where `core` sits |
 | 5 | **Folder Structure** | [§10](#10-folder-structure) | Now the module names have meaning, see where they live |
 | 6 | **Running the Project** | [§9](#9-running-the-project) | Get it started locally |
 | 7 | **Triggering a Workflow** | [§9.4](#94-trigger-an-autonomous-qa-run) | Kick off your first autonomous run |
@@ -798,12 +800,13 @@ D:\QA AI Automation\AI-QA-OS Architecture\
 
 ### 5.2 Designed but Not Yet Built
 
-- Test data generation (`ai-qa-os-testdata` is a stub)
+- Test data generation — the broader engine (real **PII masking** exists via MOD-4/ADR-030; generation not built)
 - Data-access abstraction (`ai-qa-os-data` is a stub)
 - Scenario Agent and Test Data Agent as distinct agents
 - Selenium, REST Assured, and Appium execution engines (only Playwright exists)
 - Agent Manager as an enforced mediator — Rule 1 is not structurally enforced in code
-- AI Confidence Score gating
+
+> *Correction (2026-07-30):* **AI Confidence Score gating is now built** — `ConfidenceGate` (core) + `ConfidencePolicyManager` (brain), integrated into the orchestrator with pause-on-`HUMAN_REVIEW` (AI-1, ADR-010). Removed from this list.
 
 ---
 
@@ -1114,7 +1117,11 @@ aiqaos:
     database-enabled: true          # gates AuthenticationController
 ```
 
-> 🔴 **Security warning — authentication is effectively disabled.** `SecurityConfig` permits `/api/auth/**`, `/api/v1/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/actuator/**`, `/api/dashboard/**`, and `/api/artifacts/**`. The same list is *also* registered in a `WebSecurityCustomizer.ignoring()` block, which bypasses the security filter chain entirely rather than merely permitting it. The net effect is that **every gateway and dashboard endpoint is reachable unauthenticated** — a fact confirmed by `verify-artifacts.ps1`, whose comment reads "no auth needed now". The CSP is also fully permissive (`default-src * 'unsafe-inline' 'unsafe-eval' data: blob:`) and frame options are disabled. This configuration is acceptable for local development and **must be tightened before any shared deployment.**
+> ✅ **Security status (updated 2026-07-30) — authentication is now real and enforced.** The warning below described an earlier state that **SEC-1 and SEC-4 have since resolved**, and is retained only as historical context:
+> - **SEC-1 (ADR):** the blanket `WebSecurityCustomizer.ignoring()` bypass was **removed**; the chain is now **deny-by-default**, gated by `aiqaos.security.enabled` (default **true**; set `false` only for open local dev). 401/403 JSON handlers + a config-driven bootstrap admin were added.
+> - **SEC-4 (ADR-016):** a **strict, tunable CSP** (`aiqaos.security.csp`), `X-Frame-Options: DENY`, Referrer/Permissions policies and HSTS are applied by **both** the gateway and dashboard chains; the artifact surface serves HTML as an attachment with `default-src 'none'; sandbox`.
+>
+> *Historical (pre-SEC-1) description:* ~~`SecurityConfig` permits `/api/auth/**`, `/api/v1/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/actuator/**`, `/api/dashboard/**`, and `/api/artifacts/**`, also registered in a `WebSecurityCustomizer.ignoring()` block that bypassed the filter chain entirely — every endpoint reachable unauthenticated, CSP fully permissive, frame options disabled.~~ No longer accurate.
 
 ### 8.8 Configuration Reference
 
@@ -1634,11 +1641,11 @@ Both services include springdoc-openapi:
 
 Test coverage is concentrated in a handful of modules. The most-tested are `ai-qa-os-orchestration` (the pipeline), `ai-qa-os-agents`, and `ai-qa-os-observability`; `dashboard`, `core`, `integration`, `learning`, `healing`, `execution`, and `security` each carry a smaller amount.
 
-**No tests at all** exist in: `gateway`, `config`, `brain`, `memory`, `reporting`, `intelligence`, `agents-runtime`, `ai-provider`, `data`, `testdata`.
+**No tests at all** exist in (as of the original snapshot): `gateway`, `config`, `brain`, `memory`, `reporting`, `intelligence`, `agents-runtime`, `ai-provider`, `data`, `testdata`.
 
-> ⚠️ The gateway — the entire public API surface — has **no tests at all**. So does `ai-qa-os-ai-provider`, which handles every outbound LLM call and cost calculation. These are the highest-value coverage gaps.
+> ⚠️ ~~The gateway and `ai-qa-os-ai-provider` have no tests — the highest-value gaps.~~ **Resolved (2026-07-30):** **MNT-3** brought both `gateway` (WorkflowController + GlobalExceptionHandler) and `ai-qa-os-ai-provider` (ModelRouter/LLMResilienceManager/ApiKeyPool/CostTracker, 21 tests) from 0 → green; `brain` also has tests (AI-1 `ConfidenceGate`, 4/4). The remaining thin/untested modules are `config`, `memory`, `reporting`, `intelligence`, `agents-runtime`, `data`, `testdata`.
 
-**Frameworks.** JUnit 5 + Mockito + AssertJ, all via `spring-boot-starter-test` only. There is **no Testcontainers** and no explicit JUnit or Mockito dependency in any POM.
+**Frameworks.** JUnit 5 + AssertJ via `spring-boot-starter-test`. Note: **Mockito is avoided on JDK 25** (it fails to instrument) — tests use hand-stubs / JDK dynamic proxies instead. No Testcontainers.
 
 **Slice annotations in use:** `@DataJpaTest` (the majority), plus some `@SpringBootTest` and `@WebMvcTest`. Test-only bootstrap classes exist for the slices that need them: `com.aiqaos.integration.TestApplication`, `com.aiqaos.observability.TestApplication`, `com.aiqaos.workflow.TestApplication`. H2 is the test database.
 
@@ -1857,9 +1864,9 @@ The `proxy_buffering off` directive is essential — without it, `/api/dashboard
 
 ### 14.8 Pre-Deployment Checklist
 
-- [ ] Replace all hardcoded credentials (`postgres/password`, the `test`-profile JWT secret)
-- [ ] Tighten `SecurityConfig` — remove the blanket `WebSecurityCustomizer.ignoring()` and narrow the permit-all list
-- [ ] Set a real Content Security Policy (the current one is fully permissive)
+- [x] Replace all hardcoded credentials (`postgres/password`, the `test`-profile JWT secret) — **done (SEC-2):** creds/JWT resolved via `SecretManager`/`${ENV}`, fail-fast when enforced
+- [x] Tighten `SecurityConfig` — remove the blanket `WebSecurityCustomizer.ignoring()` and narrow the permit-all list — **done (SEC-1):** deny-by-default chain gated by `aiqaos.security.enabled`
+- [x] Set a real Content Security Policy (the current one is fully permissive) — **done (SEC-4, ADR-016):** strict tunable CSP via `aiqaos.security.csp` on both chains
 - [ ] Set `PLAYWRIGHT_ARTIFACTS_DIR` — the default is an absolute Windows path
 - [ ] Reconcile the Compose database name and port with the application YAML
 - [ ] Add `mvn test` to the CI build job
@@ -1885,10 +1892,10 @@ The docs repo roadmap marks **all 11 phases and all 12 steps as `Not Started`**,
 | Design element | Status in code |
 |---|---|
 | Scenario Agent, Test Data Agent | Not present as distinct agents |
-| Test Data Intelligence Engine | `ai-qa-os-testdata` is a stub — empty class declarations only |
+| Test Data Intelligence Engine | Partial: real **PII masking** added (**MOD-4**, ADR-030 — classification-driven, pluggable, format-preserving); the broader generation engine is not built |
 | Data layer abstraction | `ai-qa-os-data` is a stub — empty declarations only |
 | Agent Manager as enforced mediator | Rule 1 (`Agent → Agent Manager → Agent`) is not structurally enforced |
-| AI Confidence Score gating | No implementation found |
+| AI Confidence Score gating | ~~No implementation found~~ **Implemented** (AI-1, ADR-010): `ConfidenceGate` (core) + `ConfidencePolicyManager` (brain), orchestrator pauses on `HUMAN_REVIEW` |
 | Selenium / REST Assured / Appium | Only Playwright exists |
 | Knowledge Engine | `08_KNOWLEDGE_ENGINE.md` itself is incomplete (Part 10 missing) |
 | 16-folder repository blueprint | The actual repo uses a flat Maven module layout instead |
@@ -1914,28 +1921,30 @@ The docs repo roadmap marks **all 11 phases and all 12 steps as `Not Started`**,
 | 5 | **Header vs footer status** | Docs `02` and `03` say `In Progress` at the top, `Completion: 100%` at the bottom |
 | 6 | **Stale instruction manifest** | `AI-QA-OS-Instruction.txt` references seven files that do not exist in the repo |
 | 7 | **Empty misnamed file** | `docs/implementation/Requirement-Management.md` is 0 bytes and violates the numbering standard |
-| 8 | **Orchestration package name** | Module is `ai-qa-os-orchestration`; its Java package is `com.aiqaos.workflow` |
+| 8 | ~~**Orchestration package name**~~ ✅ Resolved | **MNT-6** (ADR-019) renamed the package `com.aiqaos.workflow` → `com.aiqaos.orchestration` |
 
 ### 15.5 Technical Debt Register
 
+> **Refresh (2026-07-30):** many items below have since been **resolved** — struck through with the resolving item/ADR. See the [Implementation Tracker](./AI-QA-OS-Implementation-Tracker.md) for authoritative status.
+
 | Priority | Item | Location |
 |---|---|---|
-| 🔴 High | Authentication bypassed for all endpoints | `SecurityConfig` |
-| 🔴 High | Plaintext credentials committed | `application.yml`, `application-test.yml` |
-| 🔴 High | CI never runs tests | `.github/workflows/deploy.yml` |
-| 🔴 High | Gateway and AI provider have zero test coverage | — |
+| ✅ Resolved | ~~Authentication bypassed for all endpoints~~ → real deny-by-default chain (**SEC-1**), gated by `aiqaos.security.enabled` | `SecurityConfig` |
+| ✅ Resolved | ~~Plaintext credentials committed~~ → env/secret-store injection, no committed secrets (**SEC-2**) | `application*.yml` |
+| ✅ Resolved | ~~CI never runs tests~~ → CI runs `compile`→`verify` on PRs (**MNT-1**) | `.github/workflows` |
+| ✅ Resolved | ~~Gateway and AI provider have zero test coverage~~ → both 0→green, 21 tests (**MNT-3**) | — |
 | 🟠 Medium | Frontend role is client-chosen and unvalidated | `LoginPage.tsx`, `RoleGuard.tsx` |
 | 🟠 Medium | Two UI pages bypass the auth-injecting API client | `ExecutionsPage`, `ExecutionDetailPage` |
 | 🟠 Medium | No frontend environment variables | `vite.config.ts`, `apiClient.ts` |
 | 🟠 Medium | Hardcoded absolute Windows artifact path | Dashboard `application.yml` |
-| 🟠 Medium | Token refresh never implemented | `apiClient.ts` |
-| 🟠 Medium | Compose DB name and port disagree with app config | `docker-compose.yml` |
-| 🟡 Low | LangChain4j BOM imported but unused | Root `pom.xml` |
-| 🟡 Low | react-query mounted but unused; still gets a build chunk | `App.tsx`, `vite.config.ts` |
+| 🟠 Medium | Token refresh never implemented (frontend) | `apiClient.ts` |
+| ✅ Resolved | ~~Compose DB name and port disagree with app config~~ → reconciled to `ai_qa_os_dashboard` (**Phase 1 / ADR-053**) | `docker-compose.yml` |
+| ✅ Resolved | ~~LangChain4j BOM imported but unused~~ → removed (**MNT-4**) | Root `pom.xml` |
+| ✅ Resolved | ~~react-query mounted but unused~~ → removed (**MNT-4**) | `App.tsx`, `vite.config.ts` |
 | 🟡 Low | `verify-all.ps1` always prints PASSED | `verify-all.ps1` |
 | 🟡 Low | `committed node_modules/` in execution resources | `ai-qa-os-execution` |
 | 🟡 Low | `tsconfig` `strict` disabled | `tsconfig.app.json` |
-| 🟡 Low | Dead UI code: `ErrorPage.tsx` unrouted, `fetchArtifactHistory` uncalled | — |
+| ✅ Resolved | ~~Dead UI code: `ErrorPage.tsx`, `fetchArtifactHistory`~~ → removed (**MNT-4**) | — |
 | 🟡 Low | UI README is the stock Vite template | `ai-qa-os-dashboard-ui/README.md` |
 
 ---
