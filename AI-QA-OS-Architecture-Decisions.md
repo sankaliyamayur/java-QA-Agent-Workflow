@@ -96,6 +96,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-065](#adr-065--distributed-executionjobqueue-over-redis-streams-redisstreamexecutionjobqueue-behind-an-optional-dependency-scale-1) | Distributed `ExecutionJobQueue` over Redis Streams: `RedisStreamExecutionJobQueue` behind an optional dependency (SCALE-1) | Accepted |
 | [ADR-066](#adr-066--userrole-mapping-via-elementcollection--role-derived-authorities-fi-ent4-c) | User↔role mapping via `@ElementCollection` + role-derived authorities (FI-ENT4-C) | Accepted |
 | [ADR-067](#adr-067--admin-write-ops-api-at-apiadmin-on-the-enforced-chain-admin-gated-fi-ent4-a) | Admin write-ops API at `/api/admin/**` on the enforced chain, ADMIN-gated (FI-ENT4-A) | Accepted |
+| [ADR-068](#adr-068--real-object-storage-binding-over-s3-s3objectstorageclient-behind-an-optional-dependency-ent-5) | Real object-storage binding over S3: `S3ObjectStorageClient` behind an optional dependency (ENT-5) | Accepted |
 
 ---
 
@@ -1504,6 +1505,29 @@ FI-ENT4-C (ADR-066) gave a real `ROLE_ADMIN`, unblocking ENT-4's mutating half (
 - *Imposed rule:* user-management **mutations require `ROLE_ADMIN` and live on the JWT-enforced chain**, never the permissive dashboard chain; an admin can neither self-lockout nor self-demote.
 
 **Related:** ENT-4; FI-ENT4-A; FI-ENT4-C/ADR-066 (the unblocker); FI-ENT4-B/ADR-052 (read-model); ADR-055/058 (JWT-authoritative tenancy); SEC-1 (auth); `DashboardSecurityConfig` (the permissive chain this routes around).
+
+---
+
+## ADR-068 — Real object-storage binding over S3: `S3ObjectStorageClient` behind an optional dependency (ENT-5)
+
+**Status:** Accepted (implemented — ENT-5 S3 binding, 2026-07-31) · **ENT-5 remains In Progress**
+
+**Context.**
+docker-compose provisions **MinIO** (`aiqaos-artifacts` bucket), but per ADR-053 the Java binding was deferred to its consumer — **ENT-5**. The `ObjectStorageClient` seam (sat on by `ObjectStorageArtifactStore`, tenant-key-prefixed per ADR-056) had only the **in-memory reference** client — no durable store, so SCALE-1's cross-host artifact reachability was unblocked in *code* but not in *fact*. ENT-5's deferred "real S3/GCS adapter" is this binding.
+
+**Decision.**
+Same shape as the SCALE-1 (Redis) and SCALE-2 (Kafka) bindings — **optional dependency + conditional bean, default unchanged**:
+- **AWS SDK for Java v2** (`software.amazon.awssdk:s3` + `url-connection-client`, both `<optional>`; BOM imported in the parent for version consistency). The portable **S3 API** — one binding serves **MinIO today and real AWS S3 / any S3-compatible store (GCS interop, Ceph, R2) later** with config only (chosen over the MinIO-native SDK, which would pin the durable path to one vendor).
+- **`S3ObjectStorageClient implements ObjectStorageClient`** maps the seam onto S3 (put/get/exists/list-paginated/delete/lastModified), preserving the contract (missing key → `NoSuchElementException`). **`S3StorageConfiguration`** builds the `S3Client` (static creds from `S3StorageProperties`, `endpointOverride` for MinIO, path-style, `UrlConnectionHttpClient`). Guard: `@ConditionalOnClass(S3Client)` + `@ConditionalOnExpression("store==object and provider==s3")`.
+- **`InMemoryObjectStorageClient`** flipped from `@ConditionalOnMissingBean` to the **inverse expression** (`provider != s3`), so exactly one client bean is active regardless of component-scan order (the SCALE-1 lesson — `@ConditionalOnMissingBean` on a scanned `@Component` is order-fragile).
+- **SEC-2:** access/secret keys are env/`.env`-injected (MinIO dev defaults), never committed. Gateway `compose` profile documents the opt-in; default `store=local` (single-host) is unchanged.
+
+**Consequences.**
+- *Positive:* durable, **portable** object storage; removes ENT-5's "no real store" gap and completes SCALE-1's artifact reachability at the storage layer; optional dep = zero AWS weight for modules that don't opt in. `S3ObjectStorageClientTest` 6/6 (fake `S3Client` proxy — seam↔S3 mapping incl. `NoSuchKey`→`NoSuchElement`); full reactor green (22 modules); default store unchanged.
+- *Negative / trade-off:* the live MinIO/S3 round-trip is **user-run** (needs the container + creds). ENT-5's **execution-worker upload** on the hot path and **running backup CronJobs** are still deferred (FI-ENT5-A/B) — so ENT-5 stays In Progress.
+- *Imposed rule:* object-storage bindings sit behind the `ObjectStorageClient` seam via the optional-dep + conditional pattern; the seam stays **S3-compatible-portable**, not vendor-pinned; exactly one client bean via mutually-exclusive expression guards.
+
+**Related:** ENT-5; SCALE-1 (the `ArtifactStore`/`ObjectStorageArtifactStore` seam this makes durable); ADR-053 (MinIO provisioned, binding-deferred-to-consumer); ADR-064/ADR-065 (the same optional-dep + conditional binding pattern); ADR-056 (tenant key-prefixing, unchanged); SEC-2 (credentials from env/secret).
 
 ---
 
