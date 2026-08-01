@@ -98,6 +98,8 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-067](#adr-067--admin-write-ops-api-at-apiadmin-on-the-enforced-chain-admin-gated-fi-ent4-a) | Admin write-ops API at `/api/admin/**` on the enforced chain, ADMIN-gated (FI-ENT4-A) | Accepted |
 | [ADR-068](#adr-068--real-object-storage-binding-over-s3-s3objectstorageclient-behind-an-optional-dependency-ent-5) | Real object-storage binding over S3: `S3ObjectStorageClient` behind an optional dependency (ENT-5) | Accepted |
 | [ADR-069](#adr-069--prompt-regression-detection-via-temporal-within-version-score-decline-fi-pe3-b) | Prompt regression detection via temporal within-version score decline (FI-PE3-B) | Accepted |
+| [ADR-070](#adr-070--heal-3-locator-drift-ranking-fi-heal3-b-deferred-no-faithful-enumerable-drift-source) | HEAL-3 locator-drift ranking (FI-HEAL3-B) deferred: no faithful, enumerable drift source | Accepted |
+| [ADR-071](#adr-071--execution-worker-artifact-upload-into-artifactstore-via-a-deterministic-key-fi-ent5-a) | Execution-worker artifact upload into `ArtifactStore` via a deterministic key (FI-ENT5-A) | Accepted |
 
 ---
 
@@ -1550,6 +1552,46 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 - *Imposed rule:* on the dashboard, "regression" means **temporal within-version decline** derived from persisted `eval_results`; insufficient-sample versions are skipped, never flagged against a fabricated baseline (ADR-063).
 
 **Related:** PE-3; FI-PE3-B; FI-PE3-A/ADR-062 (the leaderboard read-model this extends); ADR-063 (never fabricate a missing signal); `PromptRegressionHarness` (the CI-time, per-case regression gate — deliberately distinct); ENT-2 (future FI-PE3-D alerting path).
+
+---
+
+## ADR-070 — HEAL-3 locator-drift ranking (FI-HEAL3-B) deferred: no faithful, enumerable drift source
+
+**Status:** Accepted (deferral, 2026-08-01) · **HEAL-3 remains In Progress** — this records why its remaining locator FIs are blocked, mirroring the LRN-3 honesty call (ADR-062/063).
+
+**Context.** FI-HEAL3-B asks for a "most-drifting-locators" ranking. Investigating the data path found **no faithful source**:
+1. The drift signal — how often a broken locator has re-drifted — lives only as `HealedLocatorRecord.reuseCount` inside **`HealingMemory`**, which stores records in the `memory` **`MemoryStore`**. That interface is `put`/`get`/`remove`/`clear` — **no enumeration/scan** — so the set of healed locators **cannot be listed** to rank them.
+2. **`HealingMemory` has no production callers at all** — `remember(...)`/`recall(...)` are invoked nowhere; it is not injected into `LocatorHealingService`/`LocatorHealCoordinator` or the engine. So even the non-enumerable store holds **no data** — an unwired, producerless component (the LRN-2/LRN-3 situation, ADR-063).
+3. The **enumerable** persisted path — `HealingMetricEntity` (observability, JPA repo, produced by `SelfHealingEngineImpl`) — records **execution-level** healing (failure category, strategy, retry, recovery status) and carries **no locator identity**, so it cannot be grouped by locator.
+
+**Decision.** **Do not build FI-HEAL3-B now, and do not fabricate a source for it.** Ranking would require either enumerating a store that cannot be enumerated, or inventing locator identity the persisted metric does not carry — both violate ADR-063 (never fabricate a missing signal). Consistent with the LRN-3 B-defer: don't ship a producerless half-pipeline that shows an empty panel forever.
+
+**What would unblock it (the real FI-HEAL3-A).** A **persisted, enumerable healed-locator store** (a JPA `HealedLocatorEntity`: brokenLocator, healedLocator, strategy, confidence, driftCount, tenantId, healedAt + repository) **fed by wiring `HealingMemory.remember(...)` into the locator-healing flow** (`LocatorHealingService`/`LocatorHealCoordinator`, which today don't call it). Once locator heals are actually produced and enumerably persisted, FI-HEAL3-B is a trivial read-model (group by locator, order by driftCount). The foundation is the wiring, not the ranking.
+
+**Consequences.** HEAL-3's produced/enumerable read-model (the `HealingAnalyticsSummary` over `HealingMetricEntity`, already shipped) is unaffected and remains the faithful HEAL-3 surface. The locator-history half (FI-HEAL3-A/B) waits for the locator-healing producer to be wired — tracked, not silently dropped.
+
+**Related:** HEAL-3; FI-HEAL3-A/B; HEAL-4 (`HealingMemory`, the unwired producer); ADR-063 (LRN-3 — same "no faithful/producer source" deferral); ADR-047 (the HEAL-3 analytics read-model that IS faithful).
+
+---
+
+## ADR-071 — Execution-worker artifact upload into `ArtifactStore` via a deterministic key (FI-ENT5-A)
+
+**Status:** Accepted (implemented — FI-ENT5-A, 2026-08-01) · **ENT-5 remains In Progress** (backup CronJobs + dashboard resolve-from-store still open)
+
+**Context.** ADR-068 gave a durable `ObjectStorageArtifactStore` (S3/MinIO), but **nothing pushed execution artifacts into it** — `ExecutionStep` (orchestration) persists `ExecutionArtifactEntity` rows holding **host-local file paths** (screenshot/video/trace/log/report), so a cross-host worker's artifacts stay unreachable elsewhere (the ENT-5/SCALE-1 gap). This slice connects that real, wired producer to the durable store. (Unlike the HEAL-3/PE-3-C read-models, this producer *is* wired — `ExecutionStep` genuinely writes these rows from `execResult.getArtifacts()`.)
+
+**Decision (Option A — deterministic, reconstructable key; no schema change).**
+- **`ArtifactUploader`** (`ai-qa-os-execution`, `@ConditionalOnProperty(aiqaos.artifacts.upload.enabled=true)`): reads each non-null, existing artifact file and `artifactStore.store(keyFor(...), bytes)`. **Best-effort** — a missing file or store failure is logged and skipped; artifact upload must never fail an execution. Injects `ArtifactStore` directly (exactly one bean: `LocalArtifactStore` default XOR `ObjectStorageArtifactStore`).
+- **Key** = `executions/<executionId>/run-<runNumber>/<browser>/<testCaseId>/<type>` — a pure function of fields `ExecutionArtifactEntity` already carries, so the durable copy is addressable **without persisting the key** (reconstruct to resolve). `ArtifactUploader.keyFor(...)` is the single source of truth. **No new columns, no migration.**
+- **Wiring:** `ExecutionStep` injects `ObjectProvider`-style `@Autowired(required=false) ArtifactUploader` (present only when enabled) and calls it immediately after `artifactRepo.save(art)`, inside a log-only try/catch. Opt-in (`aiqaos.artifacts.upload.enabled`, default **false**) → non-breaking; the tenant key-prefix (ADR-056) applies from the bound tenant automatically.
+- **Rejected — explicit key columns + migration (V23):** records the key redundantly (it's derivable) for a wider entity + migration; Option A gets the link for free.
+
+**Consequences.**
+- *Positive:* execution artifacts become durable + **cross-host reachable** with the S3 binding — closes SCALE-1's artifact gap at the producer; zero schema change; default path unchanged. `ArtifactUploaderTest` 3/3 (fake store + `@TempDir`: keyed upload, null/missing skipped, throwing-store swallowed); full reactor green (22 modules).
+- *Negative / trade-off:* the dashboard artifact-**serving** path still reads local files — resolving served artifacts from `ArtifactStore` (reconstruct `keyFor`) is a follow-on (FI-ENT5-C). Live browser execution → real bucket round-trip is user-run. Backup CronJobs (FI-ENT5-B) still open → ENT-5 stays In Progress.
+- *Imposed rule:* durable artifact keys are **derived deterministically** from stable execution fields (`keyFor`), not persisted; artifact upload is always **best-effort** and never fails an execution.
+
+**Related:** ENT-5; FI-ENT5-A; ADR-068 (the durable store this feeds); SCALE-1 (the cross-host artifact gap); ADR-056 (tenant key-prefix, applied automatically); `ExecutionStep` / `ExecutionArtifactEntity` (the wired producer).
 
 ---
 
