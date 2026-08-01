@@ -101,6 +101,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-070](#adr-070--heal-3-locator-drift-ranking-fi-heal3-b-deferred-no-faithful-enumerable-drift-source) | HEAL-3 locator-drift ranking (FI-HEAL3-B) deferred: no faithful, enumerable drift source | Accepted |
 | [ADR-071](#adr-071--execution-worker-artifact-upload-into-artifactstore-via-a-deterministic-key-fi-ent5-a) | Execution-worker artifact upload into `ArtifactStore` via a deterministic key (FI-ENT5-A) | Accepted |
 | [ADR-072](#adr-072--heal-3-persisted-locator-store-fi-heal3-a-deferred-the-locator-healing-subsystem-is-unwired-end-to-end) | HEAL-3 persisted locator store (FI-HEAL3-A) deferred: the locator-healing subsystem is unwired end-to-end | Accepted |
+| [ADR-073](#adr-073--serve-execution-artifacts-from-artifactstore-via-an-additive-key-endpoint-fi-ent5-c) | Serve execution artifacts from `ArtifactStore` via an additive key endpoint (FI-ENT5-C) | Accepted |
 
 ---
 
@@ -1612,6 +1613,27 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 **Consequences.** HEAL-3's produced/enumerable analytics read-model (`HealingAnalyticsSummary` over `HealingMetricEntity`, ADR-047) remains the faithful HEAL-3 surface. The locator-history half (FI-HEAL3-A/B) waits for the locator-healing subsystem to be wired end-to-end with a genuine broken-locator source — tracked, not silently dropped. Consistent with the LRN-3 (ADR-063) and FI-HEAL3-B (ADR-070) honesty calls: the codebase has several read-models/subsystems built ahead of their producers.
 
 **Related:** HEAL-3; FI-HEAL3-A/B; ADR-070 (FI-HEAL3-B block — this is its unblocker, itself blocked); ADR-063 (never fabricate a missing signal); HEAL-1/HEAL-2 (`LocatorHealingService`/`LocatorHealCoordinator`/`HealingMemory` — the unwired subsystem); ADR-047 (the faithful HEAL-3 analytics surface).
+
+---
+
+## ADR-073 — Serve execution artifacts from `ArtifactStore` via an additive key endpoint (FI-ENT5-C)
+
+**Status:** Accepted (implemented — FI-ENT5-C, 2026-08-01) · **ENT-5 remains In Progress** (backup CronJobs + multi-tenant serve-binding still open)
+
+**Context.** FI-ENT5-A (ADR-071) uploads execution artifacts into the durable `ArtifactStore` under `keyFor(...)`. But the dashboard's `ArtifactController` serves only **local files** (`/api/artifacts/**` → `FileSystemResource` from `resolvedBaseDir`), and its metadata `toArtifactUrl(...)` **returns null when the local file is absent** — so on a different host / after local cleanup the durable copy exists but is unreachable. This slice is the read side of the FI-ENT5-A loop.
+
+**Decision (Option A — additive key endpoint + opt-in durable URLs).**
+- **`GET /api/artifacts/store/**`** (`serveFromStore`) resolves bytes from `ArtifactStore` by key: rejects `..` (400, defence-in-depth over the store's own guard), `getIfAvailable()` a null store → 404, `resolve(key)` in try/catch (throws on absent key) → 404, content-type from the key's trailing `/<type>` segment, streamed as `ByteArrayResource` with the **same SEC-4 headers** as file serving (`nosniff`, `default-src 'none'; sandbox`, `attachment` for HTML).
+- **Opt-in URL emission:** when `aiqaos.artifacts.upload.enabled=true` (the same flag that governs upload), the metadata endpoints emit `/api/artifacts/store/<keyFor(...)>` URLs for produced artifacts (path column non-null) via `ArtifactUploader.keyFor` — which resolve regardless of local presence. When off, the local-file URLs are used **unchanged**. The React UI is agnostic (renders whatever URL the DTO carries) → **no UI change**.
+- Dashboard gains an explicit `ai-qa-os-execution` dependency (previously only transitive via orchestration) since it now directly uses `ArtifactStore`/`keyFor`.
+- **Rejected — fall back inside `/api/artifacts/**`:** that route's path is the local relative path, not `keyFor`, so it can't locate FI-ENT5-A's uploads without re-keying, and it entangles the SEC-4 filesystem guards with object-key resolution.
+
+**Consequences.**
+- *Positive:* durable artifacts are now servable → reachable cross-host / after local cleanup; additive + opt-in means **zero regression** to the working local path (default unchanged). `ArtifactStoreServingTest` 5/5 (fake store + `MockHttpServletRequest`: keyed serve + type→content-type, `..`→400, absent→404, no-store→404); full reactor green (22 modules), dashboard `@SpringBootTest` boots with the new dep.
+- *Negative / trade-off:* **tenant scope** — `ArtifactStore` applies a tenant key-prefix (ADR-056) from the request's bound tenant; the open dashboard serve path has no tenant bound (→ system tenant), so durable serving is correct for **single-tenant/system** deployments and **safely 404s** (never leaks — different tenant prefixes) under multi-tenant. Multi-tenant serve-binding (tenant carried in the URL + bound at serve) is a follow-on (**FI-ENT5-E**). Backup CronJobs (FI-ENT5-B) still open → ENT-5 stays In Progress. Live cross-host round-trip is user-run.
+- *Imposed rule:* durable serving reuses FI-ENT5-A's `keyFor` scheme on a dedicated route; it never mixes object-key resolution into the filesystem path guards, and it carries the same SEC-4 hardening.
+
+**Related:** ENT-5; FI-ENT5-C; ADR-071 (FI-ENT5-A upload — the write side); ADR-068 (the durable store); ADR-056 (tenant key-prefix — the multi-tenant caveat); SEC-4 (artifact-serving hardening).
 
 ---
 
