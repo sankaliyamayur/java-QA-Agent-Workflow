@@ -100,6 +100,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-069](#adr-069--prompt-regression-detection-via-temporal-within-version-score-decline-fi-pe3-b) | Prompt regression detection via temporal within-version score decline (FI-PE3-B) | Accepted |
 | [ADR-070](#adr-070--heal-3-locator-drift-ranking-fi-heal3-b-deferred-no-faithful-enumerable-drift-source) | HEAL-3 locator-drift ranking (FI-HEAL3-B) deferred: no faithful, enumerable drift source | Accepted |
 | [ADR-071](#adr-071--execution-worker-artifact-upload-into-artifactstore-via-a-deterministic-key-fi-ent5-a) | Execution-worker artifact upload into `ArtifactStore` via a deterministic key (FI-ENT5-A) | Accepted |
+| [ADR-072](#adr-072--heal-3-persisted-locator-store-fi-heal3-a-deferred-the-locator-healing-subsystem-is-unwired-end-to-end) | HEAL-3 persisted locator store (FI-HEAL3-A) deferred: the locator-healing subsystem is unwired end-to-end | Accepted |
 
 ---
 
@@ -1592,6 +1593,25 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 - *Imposed rule:* durable artifact keys are **derived deterministically** from stable execution fields (`keyFor`), not persisted; artifact upload is always **best-effort** and never fails an execution.
 
 **Related:** ENT-5; FI-ENT5-A; ADR-068 (the durable store this feeds); SCALE-1 (the cross-host artifact gap); ADR-056 (tenant key-prefix, applied automatically); `ExecutionStep` / `ExecutionArtifactEntity` (the wired producer).
+
+---
+
+## ADR-072 — HEAL-3 persisted locator store (FI-HEAL3-A) deferred: the locator-healing subsystem is unwired end-to-end
+
+**Status:** Accepted (deferral, 2026-08-01) · **HEAL-3 remains In Progress** — records why FI-HEAL3-A (the FI-HEAL3-B unblocker in ADR-070) is itself blocked deeper than expected.
+
+**Context.** ADR-070 identified FI-HEAL3-A — a persisted, enumerable healed-locator store fed by wiring `HealingMemory` — as the unblocker for the drift ranking. Re-grounding to build it found the blocker is **not** the persistence layer but the **entire locator-healing chain**, missing at every link:
+1. **The locator healers are unwired.** `LocatorHealingService.heal(...)` and `LocatorHealCoordinator.heal(...)` (HEAL-1/HEAL-2) have **zero production callers**. The self-healing pipeline's only `.heal(...)` (`SelfHealingStep`) invokes `SelfHealingEngine` — the execution-**retry** path (retry/strategy level), which never touches individual locators.
+2. **No failure → broken-locator source exists.** `LocatorHealingRequest` needs a structured `brokenLocator` + element attributes; nothing produces one. `ExecutionResult` carries an `errorMessage` string; the `SelfHealingAgent` decision JSON is `retryRequired`/`healingAction`/`reason` — no locator identity.
+3. `HealingMemory.remember(...)` is therefore never called; no locator heals are ever produced.
+
+**Decision.** **Defer FI-HEAL3-A; do not build the store now.** Persisting `HealingMemory` heals would feed off a subsystem that is never invoked and has no faithful input — a producerless half-pipeline (ADR-063). Crucially, the missing first link — deriving a **structured broken-locator from unstructured Playwright error text** — is exactly the kind of invented signal ADR-063 forbids; it must come from a genuine structured source, not text-scraping.
+
+**What FI-HEAL3-A genuinely requires (the real, larger feature).** (a) Capture a structured broken-locator at failure time from a real source (e.g. the execution engine emitting the failing selector as structured data, not parsed from a message); (b) invoke `LocatorHealCoordinator` in the self-healing loop for locator failures; (c) `HealingMemory.remember(...)` + persist an enumerable `HealedLocatorEntity`; (d) the FI-HEAL3-B ranking read-model. This is a multi-part integration touching the core self-healing path — beyond a focused FI, and gated on (a) having a faithful, non-fabricated source.
+
+**Consequences.** HEAL-3's produced/enumerable analytics read-model (`HealingAnalyticsSummary` over `HealingMetricEntity`, ADR-047) remains the faithful HEAL-3 surface. The locator-history half (FI-HEAL3-A/B) waits for the locator-healing subsystem to be wired end-to-end with a genuine broken-locator source — tracked, not silently dropped. Consistent with the LRN-3 (ADR-063) and FI-HEAL3-B (ADR-070) honesty calls: the codebase has several read-models/subsystems built ahead of their producers.
+
+**Related:** HEAL-3; FI-HEAL3-A/B; ADR-070 (FI-HEAL3-B block — this is its unblocker, itself blocked); ADR-063 (never fabricate a missing signal); HEAL-1/HEAL-2 (`LocatorHealingService`/`LocatorHealCoordinator`/`HealingMemory` — the unwired subsystem); ADR-047 (the faithful HEAL-3 analytics surface).
 
 ---
 
