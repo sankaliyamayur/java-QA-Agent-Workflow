@@ -97,6 +97,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-066](#adr-066--userrole-mapping-via-elementcollection--role-derived-authorities-fi-ent4-c) | User↔role mapping via `@ElementCollection` + role-derived authorities (FI-ENT4-C) | Accepted |
 | [ADR-067](#adr-067--admin-write-ops-api-at-apiadmin-on-the-enforced-chain-admin-gated-fi-ent4-a) | Admin write-ops API at `/api/admin/**` on the enforced chain, ADMIN-gated (FI-ENT4-A) | Accepted |
 | [ADR-068](#adr-068--real-object-storage-binding-over-s3-s3objectstorageclient-behind-an-optional-dependency-ent-5) | Real object-storage binding over S3: `S3ObjectStorageClient` behind an optional dependency (ENT-5) | Accepted |
+| [ADR-069](#adr-069--prompt-regression-detection-via-temporal-within-version-score-decline-fi-pe3-b) | Prompt regression detection via temporal within-version score decline (FI-PE3-B) | Accepted |
 
 ---
 
@@ -1528,6 +1529,27 @@ Same shape as the SCALE-1 (Redis) and SCALE-2 (Kafka) bindings — **optional de
 - *Imposed rule:* object-storage bindings sit behind the `ObjectStorageClient` seam via the optional-dep + conditional pattern; the seam stays **S3-compatible-portable**, not vendor-pinned; exactly one client bean via mutually-exclusive expression guards.
 
 **Related:** ENT-5; SCALE-1 (the `ArtifactStore`/`ObjectStorageArtifactStore` seam this makes durable); ADR-053 (MinIO provisioned, binding-deferred-to-consumer); ADR-064/ADR-065 (the same optional-dep + conditional binding pattern); ADR-056 (tenant key-prefixing, unchanged); SEC-2 (credentials from env/secret).
+
+---
+
+## ADR-069 — Prompt regression detection via temporal within-version score decline (FI-PE3-B)
+
+**Status:** Accepted (implemented — FI-PE3-B, 2026-08-01) · **PE-3 remains In Progress** (FI-PE3-C per-execution history still open)
+
+**Context.**
+PE-3's read-model shows a prompt-version leaderboard (mean score per version) but **no regression signal** — a prompt engineer can't see which versions got *worse*. The existing CI-time `PromptRegressionHarness` compares a **fresh run** against a per-**case** file `Baseline` (`golden/<suite>.baseline.json`); it is not a read-model, and its per-case baseline is a **different granularity** than the dashboard's per-version means — joining them would fabricate a comparison (ADR-063). But the persisted `eval_results` carry **`score` + `createdTime`**, which supports a faithful temporal signal with no new data source.
+
+**Decision (Option A — temporal within-version).**
+- **`PromptRegressionAnalyzer`** (pure, `ai-qa-os-eval`): per version, take its scores **ordered by `createdTime`**, split at the midpoint into an **earlier** and a **recent** window, and flag it iff `recentMean < earlierMean − tolerance` (compared with a floating-point epsilon so a drop of *exactly* tolerance is not a regression). A version with fewer than `minSamples` results is **skipped — never flagged against a fabricated baseline** (ADR-063). Signals sorted worst-first. DTOs: `PromptRegressionSignal` (versionId, baseline/current/delta, sampleCount), `PromptRegressionReport` (tolerance, count, signals).
+- **Dashboard:** `PromptQualityService.getRegressions()` groups `eval_results` by version, sorts each by `createdTime` (nulls last, so undated rows never masquerade as "recent"), delegates to the analyzer; tolerance/minSamples from config (`aiqaos.eval.regression.tolerance:0.05`, `min-samples:4`). New endpoint `GET /api/dashboard/prompt-quality/regressions`. React `PromptQualityPage` gains a regressions panel.
+- **Rejected — champion-relative** (flag versions below the best by a margin): that measures *gap-to-best*, not *regression* — a brand-new weak version trips it while a genuinely-declining champion never does; it also duplicates the leaderboard spread.
+
+**Consequences.**
+- *Positive:* a genuine, faithful *regression* signal (temporal decline) with **no benchmark re-run and no new data source**; the existing `PromptQualitySummary`/`PromptQualityAssembler` and their tests are **untouched** (capability added alongside). `PromptRegressionAnalyzerTest` 7/7, `PromptQualityServiceTest` 3/3, full reactor green (22 modules); UI lint/build clean.
+- *Negative / trade-off:* needs ≥ `minSamples` history per version to judge (else skipped — honest, not fabricated); a version whose results are all one batch splits by case-order rather than run-order; the live page over a real multi-run `eval_results` is user-run. FI-PE3-C (per-execution history) and regression **alerting** (an ENT-2 `NotificationEvent` hook, FI-PE3-D) are deferred.
+- *Imposed rule:* on the dashboard, "regression" means **temporal within-version decline** derived from persisted `eval_results`; insufficient-sample versions are skipped, never flagged against a fabricated baseline (ADR-063).
+
+**Related:** PE-3; FI-PE3-B; FI-PE3-A/ADR-062 (the leaderboard read-model this extends); ADR-063 (never fabricate a missing signal); `PromptRegressionHarness` (the CI-time, per-case regression gate — deliberately distinct); ENT-2 (future FI-PE3-D alerting path).
 
 ---
 
