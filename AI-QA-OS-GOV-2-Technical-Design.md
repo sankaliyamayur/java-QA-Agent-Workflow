@@ -82,4 +82,6 @@ Shipped as designed (`ai-qa-os-gateway`, `com.aiqaos.gateway.compliance`):
 
 **Honesty:** self-attestation, not certification; statuses are curated from real shipped items (no false SATISFIED — enforced by a test). Deriving status from live audit evidence is FI-GOV2-B.
 
-**Follow-on:** FI-GOV2-A (React compliance page — coverage bars + control table), FI-GOV2-B (runtime-evidence automation from GOV-1 audit / `SecurityAuditLogger`), FI-GOV2-C (auditor-facing export).
+**FI-GOV2-A done (2026-08-02) — GOV-2 → Completed.** React `/compliance` page (`ai-qa-os-dashboard-ui`): `complianceService.ts` + `CompliancePage.tsx` (per-framework coverage bars + control table with Satisfied/Partial/Not-implemented badges + the attestation disclaimer) + route + nav (`ShieldAlert`). The endpoint is on the gateway, so a Vite proxy rule routes `/api/governance` → `:8080` (the rest of `/api` stays → dashboard `:8090`). `npm run lint` clean, `npm run build` green (`CompliancePage` chunk emitted). GOV-2's "frameworks & dashboard" deliverable is complete; live viewing (against a running gateway + `npm run dev`) is user-run.
+
+**Follow-on (enhancements):** FI-GOV2-B (runtime-evidence automation from GOV-1 audit / `SecurityAuditLogger` — turn attestation into evidenced status), FI-GOV2-C (auditor-facing export).

@@ -1790,7 +1790,7 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 
 ## ADR-081 — Compliance control catalog + coverage read-model (GOV-2)
 
-**Status:** Accepted (backend implemented — GOV-2, 2026-08-02, **un-deferred at user request**) · **GOV-2 → In Progress** (React UI + evidence-automation are FIs)
+**Status:** Accepted (implemented — GOV-2, 2026-08-02, **un-deferred at user request**) · **GOV-2 → Completed** (backend + React dashboard page; evidence-automation FI-GOV2-B is an enhancement)
 
 **Context.** GOV-2 ("compliance frameworks & dashboard" — SOC 2 / ISO 27001 / GDPR). Before designing, verified it is **not producerless**: the governance stack is built and produced (GOV-1 AI audit trail, GOV-3 policy engine, GOV-4 version registry, `SecurityAuditLogger`, plus SEC-1/2/4/6, ENT-1/4). A compliance framework **is** a control catalog — a curated matrix mapping implemented capabilities to requirements — which is **declarative attestation**, not a runtime read-model needing a data producer (so not the HEAL-3/LRN-3 trap).
 
@@ -1802,7 +1802,7 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 
 **Consequences.**
 - *Positive:* a real, testable compliance backend curated from genuinely-implemented controls; auditor-recognisable (a controls matrix + coverage). `ComplianceAssemblerTest` 3/3 (coverage math, per-framework grouping, ref-sort, empty/null) + `ComplianceControlCatalogTest` 4/4 (well-formed; **SATISFIED ⇒ names a capability**; all 3 frameworks covered; **contains honest gaps** — not all-green). Full reactor green (21 modules); additive.
-- *Negative / honesty:* it is **self-attestation, not a formal certification**; statuses are curated (authored) not derived from live audit evidence — deriving/confirming from GOV-1 audit data is FI-GOV2-B. The React compliance page is FI-GOV2-A. So **GOV-2 stays In Progress**.
+- *Negative / honesty:* it is **self-attestation, not a formal certification**; statuses are curated (authored) not derived from live audit evidence — deriving/confirming from GOV-1 audit data is an enhancement (FI-GOV2-B). The **React compliance page is done** (FI-GOV2-A: `/compliance`, per-framework coverage bars + control table + the attestation disclaimer; the UI proxies `/api/governance` → the gateway). The "frameworks & dashboard" deliverable is complete → **Completed**; live viewing against a running gateway is user-run (as with the other dashboard pages).
 - *Imposed rule:* a compliance control is marked SATISFIED only when a shipped capability backs it; the matrix records gaps honestly and labels itself self-attestation.
 
 **Related:** GOV-2; GOV-1 (audit trail — the evidence source for FI-GOV2-B) / GOV-3 / GOV-4; SEC-1/2/4/6, ENT-1/4 (the controls attested); ADR-063 (never fabricate — here, no false SATISFIED); FI-GOV2-A/B/C (UI, evidence automation, auditor export).
