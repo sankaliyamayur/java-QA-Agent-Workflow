@@ -104,6 +104,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-073](#adr-073--serve-execution-artifacts-from-artifactstore-via-an-additive-key-endpoint-fi-ent5-c) | Serve execution artifacts from `ArtifactStore` via an additive key endpoint (FI-ENT5-C) | Accepted |
 | [ADR-074](#adr-074--runnable-backup-cronjobs-to-object-storage-fi-ent5-b) | Runnable backup CronJobs to object storage (FI-ENT5-B) | Accepted |
 | [ADR-075](#adr-075--per-workflow-tokencontext-budgeting-mirroring-the-ent-3-cost-soft-cap-ai-6) | Per-workflow token/context budgeting mirroring the ENT-3 cost soft-cap (AI-6) | Accepted |
+| [ADR-076](#adr-076--artifact-content-signing-hmac-sha256-for-tamper-evidence-sec-6) | Artifact content signing (HMAC-SHA256) for tamper-evidence (SEC-6) | Accepted |
 
 ---
 
@@ -1681,6 +1682,27 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 - *Imposed rule:* token/context budgeting enforces on **recorded actual token counts** (`LLMResponse.usage`), never a pre-call estimate, keeping it as faithful as the cost soft-cap.
 
 **Related:** AI-6; ENT-3/ADR-025 (the cost soft-cap this mirrors); `CostTracker` (the shared real-usage feed); ADR-063 (never fabricate — hence real counts, not estimates); FI-AI6-A (estimated per-request context guard, deferred).
+
+---
+
+## ADR-076 — Artifact content signing (HMAC-SHA256) for tamper-evidence (SEC-6)
+
+**Status:** Accepted (implemented — SEC-6 signed-artifacts half, 2026-08-02, **un-deferred at user request**) · **SEC-6 → In Progress** (mTLS half = FI-SEC6-B, infra)
+
+**Context.** SEC-6 ("Signed artifacts & mTLS between services", regulated-deployment posture) has two deliverables: **signed artifacts** (app code) and **mTLS** (infra/config). Nothing signed artifacts; for a regulated posture, an artifact's integrity/provenance should be provable and tampering in the object store detectable.
+
+**Decision (Option A — content signing, over signed-URLs).** The buildable half:
+- **`ArtifactSigner`** (`ai-qa-os-execution`) — `sign(bytes)` = **HMAC-SHA256** hex (key from `aiqaos.artifacts.signing.secret`, SEC-2, env-injected); `verify(bytes, sig)` = constant-time compare (`MessageDigest.isEqual`). `isSigningEnabled()` = enabled **and** non-blank secret (blank → **fail closed**, treated as unsigned). Opt-in `aiqaos.artifacts.signing.enabled` (default false).
+- **`ArtifactUploader`** (FI-ENT5-A) — on upload, if signing is on, also stores a **`<key>.sig`** sidecar (`store(key + ".sig", sign(bytes))`); best-effort, never fails the upload.
+- **`ArtifactController.serveFromStore`** (FI-ENT5-C) — verifies the served bytes against the `<key>.sig` sidecar and sets an **`X-Artifact-Integrity`** response header: `verified` / `MISMATCH` (logged as a tamper signal) / `unverified` (no sidecar) / `unsigned` (signing off). A mismatch is **detected and surfaced, not denied** — serving returns the stored bytes; the header carries the verdict. Never verifies a `.sig` object against its own sidecar.
+- **Rejected — signed URLs (access control):** a different concern from "are the artifacts trustworthy"; kept as separate FI-ENT5-D/E.
+
+**Consequences.**
+- *Positive:* real HMAC over real bytes → tamper-evidence/provenance for a regulated deployment; SEC-2 key handling; constant-time verify; default-off keeps every path byte-for-byte unchanged. `ArtifactSignerTest` 7/7 (round-trip, tamper, key-isolation, fail-closed, deterministic), `ArtifactUploaderTest` +signed-sidecar, `ArtifactStoreServingTest` +integrity-header (verified/MISMATCH/unsigned); full reactor green (22 modules).
+- *Negative / trade-off:* the **mTLS** half (`FI-SEC6-B`) is infra — Spring SSL bundles / service-mesh config + cert Secrets + manifests, authored-and-cluster-validated like the backup CronJobs — so **SEC-6 stays In Progress**. Sidecar resolution shares FI-ENT5-C's tenant caveat (correct for single-tenant/system). Detection-not-denial is deliberate (an operator decides on a mismatch); a deny-on-mismatch mode is a possible FI.
+- *Imposed rule:* artifact signing is **HMAC-SHA256 over the bytes** with an env/secret key (SEC-2), verified constant-time; a signature **mismatch is surfaced, never silently dropped**.
+
+**Related:** SEC-6; ADR-071 (FI-ENT5-A upload — where sidecars are written) + ADR-073 (FI-ENT5-C serve — where they're verified); SEC-2 (signing key from env/secret); FI-SEC6-B (mTLS, infra half); FI-ENT5-D/E (signed URLs — the rejected reading, kept separate).
 
 ---
 

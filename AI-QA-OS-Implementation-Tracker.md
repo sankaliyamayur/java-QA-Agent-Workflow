@@ -35,10 +35,10 @@
 |---|---|
 | Total roadmap items | 76 |
 | Planned | 0 |
-| In Progress | 6 |
+| In Progress | 7 |
 | Under Review | 0 |
 | Completed | 61 |
-| Deferred | 8 |
+| Deferred | 7 |
 | Incremental (rolling) | 1 (`AGT-1`) |
 
 **By phase:** Phase 0 → 9 · Phase 1 → 11 · Phase 2 → 12 · Phase 2 (DX) → 5 · Phase 3 → 11 · Phase 4 → 24 · Vision → 4
@@ -63,7 +63,7 @@
 | SEC-3 | Prompt-injection & output-grounding defence | Completed | Security + AI/Brain | 🟠 P1 | Phase 1 | v1.4 | intelligence / orchestration / execution | MOD-3 | Implemented 2026-07-23 (Option A — Guardrail promoted eval→core): `PromptInjectionGuardrail` (intelligence, detect+delimit; `PromptSecurityGuard` delegates), `ActionAllowlistGuardrail` (orchestration output-grounding, into `LLMResponseValidator`), `ScriptSurfaceGuardrail` (execution deny-list, into `ExecutionValidator`). Config `aiqaos.security.guardrails.enabled/mode` (enforce default), null-safe injection. Full reactor BUILD SUCCESS (22 modules); LLMResponseValidator 15/15 + integration E2E unaffected; new guard tests green. ADR-015. Deterministic — no live-LLM caveat |
 | SEC-4 | CSP & transport hardening | Completed | Security | 🟠 P1 | Phase 1 | v1.4 | security / dashboard | — | Implemented 2026-07-23 (§0.3a strict/tunable CSP, §0.3b HTML-attachment): shared `SecurityHeaders` (strict CSP via `aiqaos.security.csp`, X-Frame DENY, Referrer/Permissions policies, HSTS) applied by BOTH chains — incl. dashboard `@Order(1)` (artifact surface, previously header-less). `ArtifactController` real-path/symlink check + nosniff + `default-src 'none';sandbox` + HTML served as attachment. Full reactor BUILD SUCCESS (22 modules); SecurityHeadersTest 2/2 + SEC-1 auth 9 intact. ADR-016. Swagger live-render tunable via property (CORS wildcard → FI-SEC4-A) |
 | SEC-5 | Supply-chain & dependency scanning in CI | Completed | Security / DevOps | 🟠 P1 | Phase 0 | v1.3 | CI (.github) | ORG-1 | Implemented 2026-07-22 (Option A visibility-first): Dependabot (both repos), Trivy-fs dep scan report-only+SARIF, UI `npm audit` report-only, gitleaks secret scan blocking w/ allowlist. Vendored node_modules skipped pending ORG-1. YAML+allowlist validated; scanner Actions run only on CI |
-| SEC-6 | Signed artifacts & mTLS between services | Deferred | Infrastructure | ⚪ P3 | Phase 3 | v2.0 | deployment / execution | ENT-1 | Regulated-deployment posture |
+| SEC-6 | Signed artifacts & mTLS between services | In Progress | Infrastructure | ⚪ P3 | Phase 3 | v2.0 | execution / dashboard / deployment | ENT-1 | **Un-deferred at user request 2026-08-02; signed-artifacts half done (ADR-076, [design](./AI-QA-OS-SEC-6-Technical-Design.md)).** Artifact **content signing** for tamper-evidence: `ArtifactSigner` (HMAC-SHA256 over the bytes, key from `aiqaos.artifacts.signing.secret` env/secret per SEC-2; constant-time verify; blank secret → fail-closed; opt-in, default off). `ArtifactUploader` (FI-ENT5-A) stores a `<key>.sig` sidecar per artifact; `ArtifactController.serveFromStore` (FI-ENT5-C) verifies the served bytes against the sidecar and sets **`X-Artifact-Integrity: verified/MISMATCH/unverified/unsigned`** (mismatch logged as a tamper signal, still served — detection, not denial). Chose content-signing over signed-URLs (the latter kept as FI-ENT5-D/E). `ArtifactSignerTest` 7/7, `ArtifactUploaderTest` 4/4, `ArtifactStoreServingTest` 7/7, **full reactor green (22 modules)**; default off (non-breaking). **Remaining (SEC-6 stays In Progress):** **mTLS between services** (FI-SEC6-B, infra — Spring SSL bundles / service-mesh + cert Secrets + manifests, cluster-validated like the backup CronJobs) |
 
 ## Category B — Maintainability & Engineering Hygiene
 
