@@ -35,10 +35,10 @@
 |---|---|
 | Total roadmap items | 76 |
 | Planned | 0 |
-| In Progress | 8 |
+| In Progress | 10 |
 | Under Review | 0 |
 | Completed | 65 |
-| Deferred | 2 |
+| Deferred | 0 |
 | Incremental (rolling) | 1 (`AGT-1`) |
 
 **By phase:** Phase 0 → 9 · Phase 1 → 11 · Phase 2 → 12 · Phase 2 (DX) → 5 · Phase 3 → 11 · Phase 4 → 24 · Vision → 4
@@ -203,7 +203,7 @@
 
 | ID | Title | Status | Owner | Priority | Phase | Target Version | Module | Dependencies | Notes |
 |----|-------|--------|-------|----------|-------|----------------|--------|--------------|-------|
-| BRAIN-1 | Staged QA Brain evolution | Deferred | AI/Brain (Architecture) | ⚪ P3 | Vision (2027→2030) | v2.x→v3.x | ai-qa-os-brain | AI-1, LRN-1, ENT-3, GOV-* | Six stages → Autonomous Brain |
+| BRAIN-1 | Staged QA Brain evolution | In Progress | AI/Brain (Architecture) | ⚪ P3 | Vision (2027→2030) | v2.x→v3.x | ai-qa-os-brain | AI-1, LRN-1, ENT-3, GOV-* | **Un-deferred 2026-08-02; maturity model + assessor + architecture (ADR-082, [design](./AI-QA-OS-BRAIN-1-Technical-Design.md)).** The multi-year evolution is Vision v3.x — out of scope for a bounded slice — so this delivers the **maturity ladder + honest current-stage self-assessment** + the evolution architecture. `BrainMaturityStage` (0 ASSISTED→5 AUTONOMOUS, cumulative) + `BrainMaturityModel` (stage→capability keys, mapped to the shipped brain components) + `BrainStageAssessor.assess(present)` → attained stage (highest cumulative stage fully satisfied; an early gap caps it — no skipping to autonomous) + gaps. `BrainStageAssessorTest` 6/6, **full reactor green (21 modules)**, additive. Self-assessment, not a certification of autonomy. **Remaining (In Progress = Vision v3.x):** real capability inventory + endpoint (FI-BRAIN1-A), enforced per-stage graduation gates (FI-BRAIN1-B), the actual multi-year evolution |
 
 ## Category Q — Prompt Engineering Evolution
 
@@ -218,7 +218,7 @@
 | ID | Title | Status | Owner | Priority | Phase | Target Version | Module | Dependencies | Notes |
 |----|-------|--------|-------|----------|-------|----------------|--------|--------------|-------|
 | AGT-1 | Agent roadmap & roster | In Progress (incremental) | AI / Agents | ⚪ P3 | Phase 4 → Vision | v2.1 → v3.x | ai-qa-os-agents | DX-2, PLG-3 | **Roster catalog landed 2026-07-29 (§0.4-A):** `AgentRoster` @Component (agents) = first-class queryable catalog seeded with the 18 roadmap agents — `AgentDescriptor` (name/`AgentCategory`/`AgentStatus`/impl), queries `byCategory`/`byStatus`/`find`/`categories` + `coverageRatio` (6 impl / 2 designed / 10 future = **6/18 coverage**). `AgentRosterTest` 7/7. ADR-045. Stays incremental/rolling — **deferred:** build the 10 Future specialist agents (API/mobile/perf/security/a11y/visual/db/arch/code-review/release) via DX-2 + PLG-3 (FI-AGT1-A); reconcile catalog vs live `AgentRegistry` beans (FI-AGT1-B) |
-| AGT-2 | Agent collaboration, lifecycle & marketplace | Deferred | AI / Agents + Platform | ⚪ P3 | Vision | v3.0 | agents-runtime | PLG-4 | Multi-agent org under mediator rules |
+| AGT-2 | Agent collaboration, lifecycle & marketplace | In Progress | AI / Agents + Platform | ⚪ P3 | Vision | v3.0 | agents-runtime | PLG-4 | **Un-deferred 2026-08-03; collaboration mediator + architecture (ADR-083, [design](./AI-QA-OS-AGT-2-Technical-Design.md)).** Lifecycle (`AgentLifecycleManager`) and marketplace/catalog (AGT-1 `AgentRoster` / PLG-4 `PluginCatalog`) already exist; the novel piece — **collaboration "under mediator rules"** — is delivered. `CollaborationMediator.mediate(request)` → decision via ordered rules: well-formed → no self-collaboration → target must advertise the requested capability → **privilege gate** (privileged capabilities require the requester's `supervisor` grant — prevents cross-agent escalation) → allow. `CollaborationPolicy` holds the rules. `CollaborationMediatorTest` 6/6, **full reactor green (21 modules)**; additive (added `spring-boot-starter-test` to agents-runtime, which had no test dep). Mediator is an unwired governance seam (infra, not producerless). **Remaining (In Progress = Vision v3.0):** wire into `AgentMessageBus` delegation (FI-AGT2-A), agent marketplace (FI-AGT2-B), collaboration protocols + org topology (FI-AGT2-C) |
 
 ---
 

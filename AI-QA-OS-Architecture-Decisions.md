@@ -110,6 +110,8 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-079](#adr-079--declarative-plugin-manifest-loader-dx-5-plugin-sdk) | Declarative plugin manifest loader (DX-5 Plugin SDK) | Accepted |
 | [ADR-080](#adr-080--plugin-marketplace-catalog-plg-4-foundation--full-service-architecture) | Plugin marketplace catalog (PLG-4 foundation) + full-service architecture | Accepted |
 | [ADR-081](#adr-081--compliance-control-catalog--coverage-read-model-gov-2) | Compliance control catalog + coverage read-model (GOV-2) | Accepted |
+| [ADR-082](#adr-082--qa-brain-maturity-model--stage-assessor-brain-1-foundation--evolution-architecture) | QA Brain maturity model + stage assessor (BRAIN-1 foundation) + evolution architecture | Accepted |
+| [ADR-083](#adr-083--multi-agent-collaboration-mediator-agt-2-foundation--org-architecture) | Multi-agent collaboration mediator (AGT-2 foundation) + org architecture | Accepted |
 
 ---
 
@@ -1806,6 +1808,47 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 - *Imposed rule:* a compliance control is marked SATISFIED only when a shipped capability backs it; the matrix records gaps honestly and labels itself self-attestation.
 
 **Related:** GOV-2; GOV-1 (audit trail — the evidence source for FI-GOV2-B) / GOV-3 / GOV-4; SEC-1/2/4/6, ENT-1/4 (the controls attested); ADR-063 (never fabricate — here, no false SATISFIED); FI-GOV2-A/B/C (UI, evidence automation, auditor export).
+
+---
+
+## ADR-082 — QA Brain maturity model + stage assessor (BRAIN-1 foundation) + evolution architecture
+
+**Status:** Accepted (foundation implemented — BRAIN-1, 2026-08-02, **un-deferred at user request**) · **BRAIN-1 → In Progress** (multi-year evolution is Vision v3.x)
+
+**Context.** BRAIN-1 ("staged QA Brain evolution", Vision 2027→2030) is a **maturity ladder** toward autonomy, not a new brain feature — the brain already ships real components (rule/LLM/hybrid decision strategies, `ConfidencePolicyManager`, `LearningEngine`/`FeedbackProcessor`, `QAPlanner`/`TestStrategyPlanner`). The multi-year evolution is out of scope for a bounded slice; what's faithful now is the **model + a current-stage self-assessment** + the recorded architecture (the PLG-4/GOV-2 shape).
+
+**Decision — build the maturity model + assessor, record the evolution architecture.**
+- **`BrainMaturityStage`** (`brain.maturity`) — six cumulative stages: 0 ASSISTED (rule-based) · 1 ADVISORY (LLM + confidence gate) · 2 SUPERVISED (hybrid + HEAL-2 approval) · 3 ADAPTIVE (learning/feedback) · 4 ORCHESTRATED (planners) · 5 AUTONOMOUS (aspirational).
+- **`BrainMaturityModel`** (`@Component`) — each stage → the capability keys that characterise it (the vocabulary a real capability inventory reports).
+- **`BrainStageAssessor`** (`@Component`) — `assess(Set<String> present)` → `BrainMaturityReport` with the **attained stage** computed **cumulatively**: the highest stage such that it and every earlier stage are fully satisfied. A gap in an early stage caps the result even if a later stage's capabilities are present — no skipping to "autonomous". Honest self-assessment (disclaimer carried), not a certification of autonomy.
+- **Evolution architecture (recorded, not built — v3.x):** per-stage graduation criteria; governance guardrails (GOV-3 policy, ENT-3 budgets, confidence gates) that must **tighten** as autonomy rises; a human-oversight model that persists through stage 5.
+
+**Consequences.**
+- *Positive:* a tangible, testable maturity framework + an honest current-position assessment for a "staged evolution" item; the cumulative rule prevents overclaiming. `BrainStageAssessorTest` 6/6 (full→AUTONOMOUS, rule-only→ASSISTED, empty→none, **early-gap caps the attained stage despite later capabilities**, missing-caps reported, six ordered stages); full reactor green (21 modules); additive.
+- *Negative / honesty:* the attained stage is **self-assessment over declared capabilities** (a capability "present" means the component exists, not that it's proven effective); true autonomy (stage 5) and the multi-year evolution are v3.x. So **BRAIN-1 stays In Progress**.
+- *Imposed rule:* brain maturity is **cumulative** — a stage is only attained when it and all earlier stages are satisfied; the model reports gaps honestly and labels itself self-assessment.
+
+**Related:** BRAIN-1; `ai-qa-os-brain` (the components the stages map to); GOV-3 (policy)/ENT-3 (budgets)/HEAL-2 (approval)/LRN-1 (learning) — the guardrails that tighten with autonomy; ADR-063 (no fabricated status); FI-BRAIN1-A/B (real capability inventory + endpoint; enforced graduation gates).
+
+---
+
+## ADR-083 — Multi-agent collaboration mediator (AGT-2 foundation) + org architecture
+
+**Status:** Accepted (foundation implemented — AGT-2, 2026-08-03, **un-deferred at user request**) · **AGT-2 → In Progress** (full multi-agent org/marketplace is Vision v3.0)
+
+**Context.** AGT-2 ("agent collaboration, lifecycle & marketplace" — "multi-agent org under mediator rules", Vision v3.0). Two of its three parts largely exist: **lifecycle** (`AgentLifecycleManager`, `AgentRuntimeManager`, `AgentHealthMonitor`) and **marketplace/catalog** (AGT-1's `AgentRoster`; PLG-4's `PluginCatalog` pattern). The genuinely-missing, novel piece is **collaboration "under mediator rules"** — a governed decision on whether one agent may delegate a capability to another. That is the bounded, faithful slice; the full org is v3.0.
+
+**Decision — build the collaboration mediator, record the org architecture.**
+- **`CollaborationMediator`** (`@Component`, `runtime.collaboration`) — `mediate(CollaborationRequest)` → `CollaborationDecision`, a stateless ordered rule set: **well-formed** (non-blank ids/capability) → **no self-collaboration** → **capability availability** (the target must advertise the requested capability) → **privilege gate** (a *privileged* capability requires the requester to hold the `supervisor` capability — prevents cross-agent privilege escalation) → **allow**.
+- **`CollaborationPolicy`** (`@Component`) — the mediator rules: the set of privileged capabilities + the `supervisor` grant.
+- **Org architecture (recorded, not built — v3.0):** an agent marketplace (published agents extending `AgentRoster`/`PluginCatalog`), collaboration protocols over `AgentMessageBus` **gated by the mediator**, lifecycle graduation, and an org topology of mediator-coordinated roles.
+
+**Consequences.**
+- *Positive:* a real, testable governance seam for multi-agent collaboration — the "mediator rules" the item names — reusing the platform's capability/permission vocabulary. `CollaborationMediatorTest` 6/6 (allow non-privileged; deny self / missing-capability / privileged-without-supervisor; **allow privileged with supervisor**; deny blank/null); full reactor green (21 modules); additive. (Added `spring-boot-starter-test` to `agents-runtime`, which had no test dependency.)
+- *Negative / honesty:* the mediator is an **unwired governance seam** — cross-agent delegation over `AgentMessageBus` doesn't consult it yet (FI-AGT2-A); the agent marketplace + collaboration protocols + org topology are v3.0. So **AGT-2 stays In Progress**. (Like `PluginCatalog`, it's infrastructure — an API to consult — not a producerless read-model.)
+- *Imposed rule:* cross-agent collaboration is **mediated** — a target must advertise the requested capability, and privileged capabilities require an explicit `supervisor` grant; no self-collaboration.
+
+**Related:** AGT-2; AGT-1 (`AgentRoster` — the marketplace/catalog half) + PLG-4 (`PluginCatalog` pattern); `AgentMessageBus` / `AgentPermissionMatrix` (the runtime the mediator will gate); FI-AGT2-A/B/C (wire into delegation; agent marketplace; collaboration protocols + org topology).
 
 ---
 
