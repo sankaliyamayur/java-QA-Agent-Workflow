@@ -107,6 +107,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-076](#adr-076--artifact-content-signing-hmac-sha256-for-tamper-evidence-sec-6) | Artifact content signing (HMAC-SHA256) for tamper-evidence (SEC-6) | Accepted |
 | [ADR-077](#adr-077--remove-the-orphan-ai-qa-os-data-module-mod-5-fold-in) | Remove the orphan `ai-qa-os-data` module (MOD-5: fold in) | Accepted |
 | [ADR-078](#adr-078--complete-claude-anthropic-messages-api--wire-ollama-local-model-ai-5) | Complete Claude (Anthropic Messages API) + wire Ollama local model (AI-5) | Accepted |
+| [ADR-079](#adr-079--declarative-plugin-manifest-loader-dx-5-plugin-sdk) | Declarative plugin manifest loader (DX-5 Plugin SDK) | Accepted |
 
 ---
 
@@ -1743,6 +1744,26 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 - *Imposed rule:* new LLM providers mirror `OpenAIProvider` (RestClient + `ApiKeyPool` for keyed vendors), report `isAvailable()` truthfully so the router never selects an unusable provider, and expose real token usage.
 
 **Related:** AI-5; `OpenAIProvider` (the pattern); `ApiKeyPool`/`SecretManager` (SEC-2 key handling); AI-6/ADR-075 (token budgeting — fed by the real token counts these providers return); FI-AI5-A (streaming/embeddings via local model).
+
+---
+
+## ADR-079 — Declarative plugin manifest loader (DX-5 Plugin SDK)
+
+**Status:** Accepted (implemented — DX-5, 2026-08-02, **un-deferred at user request**) · DX-5 → Completed
+
+**Context.** DX-5 is the "developer half" of the plugin ecosystem. The **runtime** half already exists — PLG-1's `Plugin` SPI + `PluginRegistry` (governed registration: unique id, `SemanticVersion` compatibility, permission checks) and PLG-3's `ExtensionRegistry`. The gap: a plugin author must **hand-construct `PluginManifest` in Java** (`new PluginManifest(...)`); there is **no declarative manifest**. Every mature plugin SDK lets authors declare metadata in a file (`package.json`, `plugin.yml`) — that's the missing ergonomic.
+
+**Decision (Option A — declarative manifest + loader/validator).**
+- **`PluginManifestLoader`** (`plugin.sdk`, `@Component`) reads a **`plugin.json`** — `load(String)` / `load(InputStream)` / `loadFromClasspath(String)` — and returns a validated `PluginManifest` ready for `PluginRegistry.register(plugin, manifest)`. Schema: `{id, version, sdkApiVersion, capabilities[], requiredPermissions[]}`.
+- **Validation** (each failure → **`PluginManifestException`** naming the field): `id` required non-blank; `version`/`sdkApiVersion` required and parseable via **PLG-1's `SemanticVersion.parse`** (so downstream compatibility checks stay consistent); `capabilities`/`requiredPermissions` optional → `Set<String>` (blanks skipped); malformed JSON / missing classpath resource → clear errors.
+- **Rejected — a broader bundle** (AbstractPlugin base + example plugin + docs): the base classes largely exist (`AbstractIntegrationPlugin`, default-method `Plugin`), and "example + docs" is open-ended — logged as FI-DX5-A/B.
+
+**Consequences.**
+- *Positive:* plugin authors declare a plugin in a file and load it with one call, closing the loop **declarative manifest → governed registration**; reuses PLG-1's `SemanticVersion` so nothing diverges. Purely additive. `PluginManifestLoaderTest` 9/9 (full/minimal manifest, missing-id, bad-version, missing-sdk-version, malformed JSON, empty, classpath load + missing-resource); full reactor green (21 modules).
+- *Neutral:* base classes / example / docs are follow-on FIs — the runtime SPI already covers the rest of "the SDK".
+- *Imposed rule:* the plugin SDK's declarative surface reuses PLG-1's manifest/version types (no parallel format); validation errors are **author-facing and field-specific**.
+
+**Related:** DX-5; PLG-1 (`Plugin`/`PluginManifest`/`PluginRegistry`/`SemanticVersion` — the runtime this fronts); PLG-3 (`ExtensionRegistry` — the sibling extension SDK); FI-DX5-A/B (example plugin + docs; `AbstractPlugin`/`PluginSdk` facade).
 
 ---
 
