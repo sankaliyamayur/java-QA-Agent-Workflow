@@ -102,6 +102,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-071](#adr-071--execution-worker-artifact-upload-into-artifactstore-via-a-deterministic-key-fi-ent5-a) | Execution-worker artifact upload into `ArtifactStore` via a deterministic key (FI-ENT5-A) | Accepted |
 | [ADR-072](#adr-072--heal-3-persisted-locator-store-fi-heal3-a-deferred-the-locator-healing-subsystem-is-unwired-end-to-end) | HEAL-3 persisted locator store (FI-HEAL3-A) deferred: the locator-healing subsystem is unwired end-to-end | Accepted |
 | [ADR-073](#adr-073--serve-execution-artifacts-from-artifactstore-via-an-additive-key-endpoint-fi-ent5-c) | Serve execution artifacts from `ArtifactStore` via an additive key endpoint (FI-ENT5-C) | Accepted |
+| [ADR-074](#adr-074--runnable-backup-cronjobs-to-object-storage-fi-ent5-b) | Runnable backup CronJobs to object storage (FI-ENT5-B) | Accepted |
 
 ---
 
@@ -1634,6 +1635,29 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 - *Imposed rule:* durable serving reuses FI-ENT5-A's `keyFor` scheme on a dedicated route; it never mixes object-key resolution into the filesystem path guards, and it carries the same SEC-4 hardening.
 
 **Related:** ENT-5; FI-ENT5-C; ADR-071 (FI-ENT5-A upload — the write side); ADR-068 (the durable store); ADR-056 (tenant key-prefix — the multi-tenant caveat); SEC-4 (artifact-serving hardening).
+
+---
+
+## ADR-074 — Runnable backup CronJobs to object storage (FI-ENT5-B)
+
+**Status:** Accepted (implemented — FI-ENT5-B, 2026-08-02) · **completes ENT-5's original three ceilings** (real store ADR-068, worker upload ADR-071, running CronJobs — this) · ENT-5 eligible for Completed on live validation
+
+**Context.** ENT-5's DR piece existed only as **placeholder templates** — `postgres-backup.yaml` `echo`'d "Upload … using …" without uploading, `artifacts-backup.yaml` synced to `s3://REPLACE-ME`, and the DB password was **plaintext** in the manifest. The tracker's third ENT-5 ceiling ("running CronJobs") was unmet.
+
+**Decision.** Complete the three CronJobs into **runnable, credential-safe** manifests (`deployment/kubernetes/backup/`):
+- **postgres** — `pg_dump -Fc` in an initContainer → shared `emptyDir` → `aws-cli` upload to `$BACKUP_BUCKET/postgres/`.
+- **qdrant** — initContainer creates a full-storage snapshot via the Qdrant API + downloads it → `aws-cli` upload.
+- **artifacts** — `aws s3 sync` the local PVC tree (legacy `store=local` deployments; with FI-ENT5-A the durable copy already exists in object storage).
+- **aws-cli with `--endpoint-url` toggled by `S3_ENDPOINT`** → one manifest set works against **MinIO in-cluster and real AWS S3** (empty endpoint).
+- **SEC-2:** all secrets (`AWS_*`, `S3_ENDPOINT`, `BACKUP_BUCKET`, `POSTGRES_PASSWORD`) come from an out-of-band `aiqaos-backup-secret` (`envFrom`/`secretKeyRef`) — the plaintext password is gone; `backup-secret.yaml` documents the shape only.
+- **`kustomization.yaml`** bundles them; a **README** covers create-secret → adjust → apply → smoke-test → restore → retention (bucket lifecycle rule; in-app `ArtifactRetentionService` for live artifacts).
+
+**Consequences.**
+- *Positive:* ENT-5's backup/DR deliverable is real and applies with `kubectl apply -k`; no plaintext creds; portable MinIO↔S3. All three original ENT-5 ceilings are now code-complete (durable store + upload + backup). YAML syntax-validated.
+- *Negative / trade-off:* **not applied to a live cluster here** (none in the build env) — semantic k8s validity (field correctness, image behaviour, the jq-less snapshot-name `sed`) is user-verified via `kubectl apply --dry-run=server` + one manual job (README step 3). Backup *retention* is a bucket lifecycle rule / follow-on scheduled trigger (FI-ENT5-F). ENT-5 stays In Progress pending the live validation (runbook §5).
+- *Imposed rule:* backup manifests carry **no plaintext credentials** — everything sensitive is injected from a Secret created out-of-band; the same manifests target MinIO and real S3 via `S3_ENDPOINT`.
+
+**Related:** ENT-5; FI-ENT5-B; ADR-068 (durable store) + ADR-071 (upload) — the other two ceilings; ADR-053 (MinIO/Postgres/Qdrant provisioned); SEC-2 (secrets from env/secret store, never committed); [Live E2E Runbook §5](./AI-QA-OS-Live-E2E-Validation-Runbook.md).
 
 ---
 
