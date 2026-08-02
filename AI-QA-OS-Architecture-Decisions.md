@@ -105,6 +105,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-074](#adr-074--runnable-backup-cronjobs-to-object-storage-fi-ent5-b) | Runnable backup CronJobs to object storage (FI-ENT5-B) | Accepted |
 | [ADR-075](#adr-075--per-workflow-tokencontext-budgeting-mirroring-the-ent-3-cost-soft-cap-ai-6) | Per-workflow token/context budgeting mirroring the ENT-3 cost soft-cap (AI-6) | Accepted |
 | [ADR-076](#adr-076--artifact-content-signing-hmac-sha256-for-tamper-evidence-sec-6) | Artifact content signing (HMAC-SHA256) for tamper-evidence (SEC-6) | Accepted |
+| [ADR-077](#adr-077--remove-the-orphan-ai-qa-os-data-module-mod-5-fold-in) | Remove the orphan `ai-qa-os-data` module (MOD-5: fold in) | Accepted |
 
 ---
 
@@ -1703,6 +1704,23 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 - *Imposed rule:* artifact signing is **HMAC-SHA256 over the bytes** with an env/secret key (SEC-2), verified constant-time; a signature **mismatch is surfaced, never silently dropped**.
 
 **Related:** SEC-6; ADR-071 (FI-ENT5-A upload — where sidecars are written) + ADR-073 (FI-ENT5-C serve — where they're verified); SEC-2 (signing key from env/secret); FI-SEC6-B (mTLS, infra half); FI-ENT5-D/E (signed URLs — the rejected reading, kept separate).
+
+---
+
+## ADR-077 — Remove the orphan `ai-qa-os-data` module (MOD-5: fold in)
+
+**Status:** Accepted (implemented — MOD-5, 2026-08-02, **un-deferred at user request**) · MOD-5 → Completed · **reactor 22 → 21 modules**
+
+**Context.** MOD-5 asked to "make `ai-qa-os-data` real, or fold it in." Grounding found it was **dead scaffolding**: 5 **completely empty** stub classes (`DatabaseConnectionManager`, `KnowledgeDatabase`, `ProjectDatabase`, `TransactionService`, `VectorDatabaseClient` — all `{}`), a `pom.xml` with **no dependencies**, and **zero dependents** (only the parent reactor referenced it). Every concern its names imply is already real elsewhere — vectors in `ai-qa-os-memory` (`VectorStoreClient`), project/knowledge data in the JPA repositories, connections/transactions in Spring (datasource + Flyway per ADR-024, `@Transactional`).
+
+**Decision — fold in / remove (Option A).** Delete the module and drop it from the parent `<modules>`. **Zero code is lost** (all five classes are empty), nothing imports it, and no entity/migration/bean lived in it — so there is nothing to migrate. The reactor drops from 22 to **21 modules**. "Make it real" (Option B) was rejected: it would **duplicate** `memory`, the JPA repositories, and Spring, and cut across established boundaries — evolving the architecture to add redundancy, the opposite of the module-boundary discipline.
+
+**Consequences.**
+- *Positive:* removes a misleading empty "data" module (a named data layer that didn't exist); full reactor `mvn clean test` **BUILD SUCCESS with 21 modules** proves nothing depended on it; no functional change.
+- *Neutral:* **going-forward reactor builds are "21 modules"** — historical ADR/tracker notes that say "22 modules" were accurate at the time and stay as written.
+- *Imposed rule:* a shared data-access need belongs in the module that **owns** that data, not a cross-cutting "data" module — the boundary this decision reinforces.
+
+**Related:** MOD-5; MOD-1/ADR-042 (`ai-qa-os-tenant` — a module that *does* own a concern, the contrast); ADR-024 (gateway-owned schema); `ai-qa-os-memory` (owns vector storage).
 
 ---
 
