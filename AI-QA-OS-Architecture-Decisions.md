@@ -103,6 +103,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-072](#adr-072--heal-3-persisted-locator-store-fi-heal3-a-deferred-the-locator-healing-subsystem-is-unwired-end-to-end) | HEAL-3 persisted locator store (FI-HEAL3-A) deferred: the locator-healing subsystem is unwired end-to-end | Accepted |
 | [ADR-073](#adr-073--serve-execution-artifacts-from-artifactstore-via-an-additive-key-endpoint-fi-ent5-c) | Serve execution artifacts from `ArtifactStore` via an additive key endpoint (FI-ENT5-C) | Accepted |
 | [ADR-074](#adr-074--runnable-backup-cronjobs-to-object-storage-fi-ent5-b) | Runnable backup CronJobs to object storage (FI-ENT5-B) | Accepted |
+| [ADR-075](#adr-075--per-workflow-tokencontext-budgeting-mirroring-the-ent-3-cost-soft-cap-ai-6) | Per-workflow token/context budgeting mirroring the ENT-3 cost soft-cap (AI-6) | Accepted |
 
 ---
 
@@ -1658,6 +1659,28 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 - *Imposed rule:* backup manifests carry **no plaintext credentials** — everything sensitive is injected from a Secret created out-of-band; the same manifests target MinIO and real S3 via `S3_ENDPOINT`.
 
 **Related:** ENT-5; FI-ENT5-B; ADR-068 (durable store) + ADR-071 (upload) — the other two ceilings; ADR-053 (MinIO/Postgres/Qdrant provisioned); SEC-2 (secrets from env/secret store, never committed); [Live E2E Runbook §5](./AI-QA-OS-Live-E2E-Validation-Runbook.md).
+
+---
+
+## ADR-075 — Per-workflow token/context budgeting mirroring the ENT-3 cost soft-cap (AI-6)
+
+**Status:** Accepted (implemented — AI-6, 2026-08-02, **un-deferred at user request**) · AI-6 → Completed
+
+**Context.** AI-6 ("context-window & cost budgeting per workflow") was Deferred. Its **cost** half was already delivered by ENT-3 (ADR-025: `CostBudgetEnforcer`/`SpendLedger`/`CostBudgetProperties`, soft-cap per global/workflow/agent, enforced in `LLMProviderManager.generate`). The novel half is **token/context budgeting** — and the faithful source already exists: `LLMResponse.getUsage().getInputTokens()/getOutputTokens()` are the **actual** per-call token counts, already seen by `CostTracker` keyed by workflow (`correlationId`) and agent.
+
+**Decision (Option A — cumulative token budget, real counts only).** Mirror ENT-3 one-to-one for **tokens**:
+- **`TokenLedger`** (counterpart to `SpendLedger`) accumulates **actual** `input+output` tokens per workflow / agent / global, daily rollover.
+- **`TokenBudgetProperties`** (`aiqaos.context.budget.*`, disabled by default) — `perWorkflowTokens` / `perAgentTokens` / `globalDailyTokens` (`Long`, null = unlimited), `enabled`, `mode` (enforce/warn).
+- **`TokenBudgetEnforcer.check(LLMRequest)`** → `BudgetVerdict` (reused; scopes `…-tokens`) — soft cap: block once **recorded actual** tokens ≥ limit.
+- **`CostTracker`** feeds the `TokenLedger` with the real usage (optional field, mirrors the `SpendLedger` feed); **`LLMProviderManager.generate`** adds a parallel pre-flight block after the cost check, throwing **`TokenBudgetExceededException`** (enforce) or logging (warn).
+- **Rejected — a per-request context-window pre-guard via an estimated input-token count** (`≈prompt.length()/4`): a genuine but *fuzzy* pre-call estimate; logged as FI-AI6-A rather than mixed into the faithful, real-count core.
+
+**Consequences.**
+- *Positive:* per-workflow (and agent/global) **token/context budgeting** enforced on **real counts** — no estimation, no fabrication (ADR-063); identical faithfulness + soft-cap contract to ENT-3. `TokenLedgerTest` 3/3 + `TokenBudgetEnforcerTest` 5/5; full reactor green (22 modules); default (`aiqaos.context.budget.enabled=false`) leaves `generate` unchanged (non-breaking).
+- *Negative / trade-off:* the ledger is in-memory (cross-restart seeding shared with ENT-3's FI-ENT3-A); per-tenant token budgets deferred (ENT-1 scope); the per-request context pre-guard is FI-AI6-A. Live budget-tripping across a real multi-call workflow is user-run (the ledger+enforcer logic is deterministically unit-proven).
+- *Imposed rule:* token/context budgeting enforces on **recorded actual token counts** (`LLMResponse.usage`), never a pre-call estimate, keeping it as faithful as the cost soft-cap.
+
+**Related:** AI-6; ENT-3/ADR-025 (the cost soft-cap this mirrors); `CostTracker` (the shared real-usage feed); ADR-063 (never fabricate — hence real counts, not estimates); FI-AI6-A (estimated per-request context guard, deferred).
 
 ---
 

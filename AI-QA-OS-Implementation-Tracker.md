@@ -37,8 +37,8 @@
 | Planned | 0 |
 | In Progress | 6 |
 | Under Review | 0 |
-| Completed | 60 |
-| Deferred | 9 |
+| Completed | 61 |
+| Deferred | 8 |
 | Incremental (rolling) | 1 (`AGT-1`) |
 
 **By phase:** Phase 0 → 9 · Phase 1 → 11 · Phase 2 → 12 · Phase 2 (DX) → 5 · Phase 3 → 11 · Phase 4 → 24 · Vision → 4
@@ -85,7 +85,7 @@
 | AI-3 | Prompt evaluation & regression harness | Completed | AI / Eval | 🟠 P1 | Phase 1 | v1.4 | ai-qa-os-eval / intelligence | MOD-3 | Implemented 2026-07-22 (Option A committed-baseline): `PromptRegressionHarness` (load golden → `PromptRunner` → MOD-3 `PromptEvaluationService` → compare vs baseline, tolerance 0.05 → `RegressionReport`) + `ClasspathGoldenDatasetProvider`, `LlmPromptRunner` (LLM + optional `PromptEngine` render via ObjectProvider), `FileBaselineStore` (`golden/<suite>.baseline.json`) + sample suite/baseline. Eval tests 21/21, reactor green. ADR-013. Engine only — **CI merge-gate + Prompt Score is PE-1** |
 | AI-4 | Semantic / prompt cache | Completed | AI-Provider / Memory | 🟡 P2 | Phase 4 | v2.1 | ai-provider / memory | MNT-3, PERF-2, SCALE-3 | Implemented 2026-07-23: Intercepts `LLMProviderManager.generate(LLMRequest)` via `PromptCacheManager` backed by `VectorStoreClient` (`"prompt_cache"` collection); similarity matching >= 0.95 (configurable `aiqaos.ai.cache.similarity-threshold`); returns 0-token 1ms response on hit, saves to cache on miss. Unit tests 2/2 green. ADR-022 |
 | AI-5 | Complete/remove Claude; wire local model | Deferred | AI-Provider | ⚪ P3 | Phase 4 | v2.1 | ai-qa-os-ai-provider | — | Ollama unlocks air-gapped deploys |
-| AI-6 | Context-window & cost budgeting per workflow | Deferred | AI/Brain | ⚪ P3 | Phase 4 | v2.1 | brain / memory | ENT-3 | Cost tracking → cost governance |
+| AI-6 | Context-window & cost budgeting per workflow | Completed | AI/Brain | ⚪ P3 | Phase 4 | v2.1 | ai-provider | ENT-3 | **Un-deferred at user request 2026-08-02; implemented (ADR-075, [design](./AI-QA-OS-AI-6-Technical-Design.md)).** Cost half was ENT-3; AI-6 adds **token/context budgeting per workflow** mirroring ENT-3's soft-cap for tokens: `TokenLedger` (counterpart to `SpendLedger`) accumulates **actual** `input+output` tokens per workflow/agent/global (fed by `CostTracker` from `LLMResponse.usage` — real counts, no estimation, ADR-063), `TokenBudgetProperties` (`aiqaos.context.budget.*`, disabled by default), `TokenBudgetEnforcer.check` → `BudgetVerdict` (soft cap: block once recorded tokens ≥ limit), `LLMProviderManager.generate` pre-flight throws `TokenBudgetExceededException` (enforce) / warns. `TokenLedgerTest` 3/3 + `TokenBudgetEnforcerTest` 5/5, **full reactor green (22 modules)**; default off (non-breaking). Live budget-tripping across a real workflow is user-run (logic deterministically unit-proven — ENT-3 Completed precedent). **Deferred FIs:** FI-AI6-A per-request context-window pre-guard (estimated input tokens), FI-AI6-B per-tenant budgets + cross-restart ledger seeding |
 
 ## Category D — Missing Enterprise Features
 
