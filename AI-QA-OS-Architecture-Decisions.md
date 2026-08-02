@@ -109,6 +109,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-078](#adr-078--complete-claude-anthropic-messages-api--wire-ollama-local-model-ai-5) | Complete Claude (Anthropic Messages API) + wire Ollama local model (AI-5) | Accepted |
 | [ADR-079](#adr-079--declarative-plugin-manifest-loader-dx-5-plugin-sdk) | Declarative plugin manifest loader (DX-5 Plugin SDK) | Accepted |
 | [ADR-080](#adr-080--plugin-marketplace-catalog-plg-4-foundation--full-service-architecture) | Plugin marketplace catalog (PLG-4 foundation) + full-service architecture | Accepted |
+| [ADR-081](#adr-081--compliance-control-catalog--coverage-read-model-gov-2) | Compliance control catalog + coverage read-model (GOV-2) | Accepted |
 
 ---
 
@@ -1784,6 +1785,27 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 - *Imposed rule:* the marketplace **catalog** (available plugins) is separate from the **registry** (installed plugins); both reuse PLG-1's manifest/version types; publish is governed (SDK compat + one publish per `id@version`).
 
 **Related:** PLG-4; PLG-1 (`PluginRegistry` — the installed-plugins counterpart); PLG-3/DX-5 (`ExtensionRegistry`/`PluginManifestLoader` — the SDK the catalog reuses); SEC-6/ADR-076 (signed plugin artifacts for the publish pipeline); ENT-1 (tenant-scoped catalogs); FI-PLG4-A/B/C (the v3.0 service, install flow, browse UI).
+
+---
+
+## ADR-081 — Compliance control catalog + coverage read-model (GOV-2)
+
+**Status:** Accepted (backend implemented — GOV-2, 2026-08-02, **un-deferred at user request**) · **GOV-2 → In Progress** (React UI + evidence-automation are FIs)
+
+**Context.** GOV-2 ("compliance frameworks & dashboard" — SOC 2 / ISO 27001 / GDPR). Before designing, verified it is **not producerless**: the governance stack is built and produced (GOV-1 AI audit trail, GOV-3 policy engine, GOV-4 version registry, `SecurityAuditLogger`, plus SEC-1/2/4/6, ENT-1/4). A compliance framework **is** a control catalog — a curated matrix mapping implemented capabilities to requirements — which is **declarative attestation**, not a runtime read-model needing a data producer (so not the HEAL-3/LRN-3 trap).
+
+**Decision (Option A — control catalog + coverage report + endpoint).**
+- **`ComplianceControlCatalog`** (`@Component`, gateway `compliance` package beside GOV-1's audit) — a curated `ComplianceControl` set (framework, requirementRef, title, `satisfiedBy`, `status`, evidence) mapping the platform's **real implemented** controls to SOC 2 / ISO 27001 / GDPR (SEC-1→CC6.1, SEC-6→CC7.1/A.14.2 integrity, ENT-1→GDPR Art.32, GOV-1→CC7.2/A.12.4/Art.30, ENT-4→CC6.2/6.3, GOV-4→CC8.1, …).
+- **`ComplianceAssembler`** (pure) → `ComplianceReport` per framework (total / satisfied / partial / notImplemented / **coveragePercent = satisfied÷total**). **`ComplianceController`** `GET /api/governance/compliance` (enforced chain — authenticated when security on).
+- **Honesty discipline (enforced by a test):** a control is `SATISFIED` **only** when it names a genuinely-shipped capability; gaps are recorded `PARTIAL` (SEC-4 transport / mTLS pending; ENT-5 backup authored-not-cluster-validated) or `NOT_IMPLEMENTED` (service mTLS; GDPR right-to-erasure/portability). Coverage counts only SATISFIED, so the headline isn't inflated; the report carries a **self-attestation, not certification** disclaimer.
+- **Rejected — docs-only matrix:** no dashboard backend.
+
+**Consequences.**
+- *Positive:* a real, testable compliance backend curated from genuinely-implemented controls; auditor-recognisable (a controls matrix + coverage). `ComplianceAssemblerTest` 3/3 (coverage math, per-framework grouping, ref-sort, empty/null) + `ComplianceControlCatalogTest` 4/4 (well-formed; **SATISFIED ⇒ names a capability**; all 3 frameworks covered; **contains honest gaps** — not all-green). Full reactor green (21 modules); additive.
+- *Negative / honesty:* it is **self-attestation, not a formal certification**; statuses are curated (authored) not derived from live audit evidence — deriving/confirming from GOV-1 audit data is FI-GOV2-B. The React compliance page is FI-GOV2-A. So **GOV-2 stays In Progress**.
+- *Imposed rule:* a compliance control is marked SATISFIED only when a shipped capability backs it; the matrix records gaps honestly and labels itself self-attestation.
+
+**Related:** GOV-2; GOV-1 (audit trail — the evidence source for FI-GOV2-B) / GOV-3 / GOV-4; SEC-1/2/4/6, ENT-1/4 (the controls attested); ADR-063 (never fabricate — here, no false SATISFIED); FI-GOV2-A/B/C (UI, evidence automation, auditor export).
 
 ---
 
