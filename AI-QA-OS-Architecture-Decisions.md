@@ -106,6 +106,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-075](#adr-075--per-workflow-tokencontext-budgeting-mirroring-the-ent-3-cost-soft-cap-ai-6) | Per-workflow token/context budgeting mirroring the ENT-3 cost soft-cap (AI-6) | Accepted |
 | [ADR-076](#adr-076--artifact-content-signing-hmac-sha256-for-tamper-evidence-sec-6) | Artifact content signing (HMAC-SHA256) for tamper-evidence (SEC-6) | Accepted |
 | [ADR-077](#adr-077--remove-the-orphan-ai-qa-os-data-module-mod-5-fold-in) | Remove the orphan `ai-qa-os-data` module (MOD-5: fold in) | Accepted |
+| [ADR-078](#adr-078--complete-claude-anthropic-messages-api--wire-ollama-local-model-ai-5) | Complete Claude (Anthropic Messages API) + wire Ollama local model (AI-5) | Accepted |
 
 ---
 
@@ -1721,6 +1722,27 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 - *Imposed rule:* a shared data-access need belongs in the module that **owns** that data, not a cross-cutting "data" module — the boundary this decision reinforces.
 
 **Related:** MOD-5; MOD-1/ADR-042 (`ai-qa-os-tenant` — a module that *does* own a concern, the contrast); ADR-024 (gateway-owned schema); `ai-qa-os-memory` (owns vector storage).
+
+---
+
+## ADR-078 — Complete Claude (Anthropic Messages API) + wire Ollama local model (AI-5)
+
+**Status:** Accepted (implemented — AI-5, 2026-08-02, **un-deferred at user request**) · AI-5 → Completed
+
+**Context.** AI-5 ("complete/remove Claude; wire local model"). `ClaudeProvider` and `OllamaProvider` were honest **stubs** (`generate()` threw, `isAvailable()` returned false so `ModelRouter` never picked them). `OpenAIProvider`/`GeminiProvider` are fully wired (RestClient + `ApiKeyPool` + JSON mapping) — the reference pattern.
+
+**Decision (Option A — complete both).** Both stubs become real providers mirroring `OpenAIProvider`:
+- **`OllamaProvider`** (local model) — `RestClient` to `${aiqaos.provider.ollama.base-url:http://localhost:11434}/api/generate`; request `{model, prompt, system?, stream:false, options:{temperature,num_predict}}`; response `{response, model, prompt_eval_count, eval_count}` → `LLMResponse` with **real token counts** (keeps cost/AI-6 budgeting faithful). Opt-in `aiqaos.provider.ollama.enabled` (default false) → `isAvailable()` is the flag; no cloud key.
+- **`ClaudeProvider`** (completed) — `RestClient` to the Anthropic **Messages API** (`/v1/messages`, headers `x-api-key` + `anthropic-version: 2023-06-01`); request `{model, max_tokens, system?, messages:[{role:user,content}]}`; response `content[0].text` + `usage{input_tokens,output_tokens}`. `ApiKeyPool` on `ANTHROPIC_API_KEY` with key-rotation on 401/403/429 (mirrors OpenAI); `isAvailable()` = key present. Chose **complete** over remove — the platform is Claude-centric.
+- **`ModelRouter`/fallback** pick them up only when genuinely available (Ollama enabled / Anthropic key set), so the default (no key, Ollama off) is **unchanged**.
+
+**Consequences.**
+- *Positive:* a **cloud-free** local path (Ollama) and a real Anthropic provider; both proven in-sandbox against the documented schemas via `MockRestServiceServer` (`OllamaProviderTest` 2/2, `ClaudeProviderTest` 3/3 — request URI/headers/body + response mapping + `isAvailable`/no-key). Full reactor green (21 modules). Non-breaking (default unavailable).
+- *Negative / trade-off:* the **live** round-trip (a running Ollama server / a real Anthropic key) is user-run — the mapping is unit-proven, the live call confirms the schema. Streaming is still generate-then-emit (FI-AI5-A).
+- *Learning captured:* a `@Component` with **two constructors** (public + package-private test seam) needs `@Autowired` on the intended one, or Spring fails with "no default constructor" at context boot — caught by the integration `@SpringBootTest`, fixed with `@Autowired` on the public ctor.
+- *Imposed rule:* new LLM providers mirror `OpenAIProvider` (RestClient + `ApiKeyPool` for keyed vendors), report `isAvailable()` truthfully so the router never selects an unusable provider, and expose real token usage.
+
+**Related:** AI-5; `OpenAIProvider` (the pattern); `ApiKeyPool`/`SecretManager` (SEC-2 key handling); AI-6/ADR-075 (token budgeting — fed by the real token counts these providers return); FI-AI5-A (streaming/embeddings via local model).
 
 ---
 
