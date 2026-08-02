@@ -108,6 +108,7 @@ Two platform-wide rules recur throughout and are cited by ID:
 | [ADR-077](#adr-077--remove-the-orphan-ai-qa-os-data-module-mod-5-fold-in) | Remove the orphan `ai-qa-os-data` module (MOD-5: fold in) | Accepted |
 | [ADR-078](#adr-078--complete-claude-anthropic-messages-api--wire-ollama-local-model-ai-5) | Complete Claude (Anthropic Messages API) + wire Ollama local model (AI-5) | Accepted |
 | [ADR-079](#adr-079--declarative-plugin-manifest-loader-dx-5-plugin-sdk) | Declarative plugin manifest loader (DX-5 Plugin SDK) | Accepted |
+| [ADR-080](#adr-080--plugin-marketplace-catalog-plg-4-foundation--full-service-architecture) | Plugin marketplace catalog (PLG-4 foundation) + full-service architecture | Accepted |
 
 ---
 
@@ -1764,6 +1765,25 @@ PE-3's read-model shows a prompt-version leaderboard (mean score per version) bu
 - *Imposed rule:* the plugin SDK's declarative surface reuses PLG-1's manifest/version types (no parallel format); validation errors are **author-facing and field-specific**.
 
 **Related:** DX-5; PLG-1 (`Plugin`/`PluginManifest`/`PluginRegistry`/`SemanticVersion` — the runtime this fronts); PLG-3 (`ExtensionRegistry` — the sibling extension SDK); FI-DX5-A/B (example plugin + docs; `AbstractPlugin`/`PluginSdk` facade).
+
+---
+
+## ADR-080 — Plugin marketplace catalog (PLG-4 foundation) + full-service architecture
+
+**Status:** Accepted (foundation implemented — PLG-4, 2026-08-02, **un-deferred at user request**) · **PLG-4 → In Progress** (standalone marketplace service is Vision/v3.0)
+
+**Context.** PLG-4 ("marketplace architecture") is tiered by the roadmap as a **new standalone service, Vision / v3.0** — a full marketplace (hosting, distribution, publish pipeline, browse UI, ratings) is deliberately out of scope for a bounded slice. But the **discovery/publish core** it's built on is buildable and testable now, and the item's name is literally the *architecture*. The plugin ecosystem otherwise exists: PLG-1 (`PluginRegistry` — installed plugins), PLG-3 (`ExtensionRegistry`), DX-5 (`PluginManifestLoader`).
+
+**Decision — build the catalog foundation, record the full-service architecture.**
+- **Foundation (built): `PluginCatalog`** (`plugin.marketplace`) — a governed registry of **available** plugin `PluginListing`s (id/name/version/sdkApiVersion/description/category/author/capabilities), distinct from `PluginRegistry`'s *installed* plugins. `publish` governance mirrors `ExtensionRegistry`: non-blank id/name, SDK-version compatible with the runtime (`ExtensionSdkProperties`, reused), and one publish per `id@version` (a newer version supersedes as "latest"). Discovery: `find`(latest)/`versions`/`search`/`byCategory`/`byCapability`/`all`. `PluginListing.from(PluginManifest, …)` links it to DX-5 (a published `plugin.json` → a listing). `PluginCatalogException` for rejections.
+- **Full-service architecture (recorded, NOT built — v3.0):** a **marketplace-service** deployable fronting `PluginCatalog`; a **publish API** (authenticated, over **SEC-6-signed** plugin artifacts, secrets via SEC-2); an **install flow** reusing the existing seam — fetch → `PluginManifestLoader.load` → `PluginRegistry.register` → `enable`; **tenant-scoped** catalogs (ENT-1); a **browse UI**, ratings, and dependency resolution. The catalog delivered here is the seam all of that sits on.
+
+**Consequences.**
+- *Positive:* a real, testable marketplace discovery core, reusing the DX-5 manifest + PLG-1 `SemanticVersion` governance (no parallel format); the v3.0 service has a concrete foundation to grow from. `PluginCatalogTest` 7/7 (publish/find/search/category/capability, version-supersede, duplicate/blank/SDK-incompat rejection, `from` mapping, empty catalog); full reactor green (21 modules); purely additive.
+- *Negative / honesty:* the standalone marketplace **service** (hosting/distribution/publish pipeline/UI) is **not built** — it is Vision/v3.0. So **PLG-4 stays In Progress**, not Completed; the catalog is a foundation, not a working marketplace (no wired publisher/consumer yet — it's infrastructure of the `PluginRegistry`/`ExtensionRegistry` class, an API to publish into, not a data read-model).
+- *Imposed rule:* the marketplace **catalog** (available plugins) is separate from the **registry** (installed plugins); both reuse PLG-1's manifest/version types; publish is governed (SDK compat + one publish per `id@version`).
+
+**Related:** PLG-4; PLG-1 (`PluginRegistry` — the installed-plugins counterpart); PLG-3/DX-5 (`ExtensionRegistry`/`PluginManifestLoader` — the SDK the catalog reuses); SEC-6/ADR-076 (signed plugin artifacts for the publish pipeline); ENT-1 (tenant-scoped catalogs); FI-PLG4-A/B/C (the v3.0 service, install flow, browse UI).
 
 ---
 
